@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paso 4: Reporte de Calidad</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            margin: 0; 
+            padding: 20px 0; 
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .step-indicator {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .step-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-description {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        .container { 
+            text-align: center; 
+            background-color: #ffffff; 
+            padding: 30px 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); 
+            width: 90%; 
+            max-width: 600px; 
+            margin: 0 auto;
+        }
+        
+        .file-inputs label { 
+            display: block; 
+            font-weight: 600; 
+            color: #333; 
+            margin: 15px 0 5px 0; 
+        }
+        
+        input[type="file"] { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #dddfe2; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+        }
+        
+        .action-button { 
+            display: inline-block; 
+            width: 100%; 
+            padding: 15px 30px; 
+            margin-top: 30px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            background-color: #dc3545; 
+            border: none; 
+            border-radius: 6px; 
+            text-decoration: none; 
+            cursor: pointer; 
+            transition: background-color 0.3s; 
+        }
+        
+        .action-button:hover { background-color: #c82333; }
+        .action-button:disabled { background-color: #f5c6cb; cursor: not-allowed; }
+        
+        #status { 
+            margin-top: 20px; 
+            font-style: italic; 
+            min-height: 20px; 
+            line-height: 1.5; 
+            padding: 10px; 
+            border-radius: 6px; 
+        }
+        
+        .status-success { color: #2a6f2b; background-color: #eaf7e9; }
+        .status-error { color: #a92020; background-color: #fce8e8; }
+        .status-processing { color: #5a7184; background-color: #f0f4f8; }
+        
+        .navigation {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .nav-button.prev {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .nav-button.next {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .nav-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .nav-button:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .step-progress {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        .file-optional {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            border: 1px dashed #dee2e6;
+        }
+        
+        .optional-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        
+        .required-label {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="step-indicator">Paso 4 de 5</div>
+        <h1 class="step-title">⭐ Reporte de Calidad</h1>
+        <p class="step-description">Procesemos el reporte de calidad más completo</p>
+    </div>
+    
+    <div class="container">
+        <div id="reporte3Status" style="display: none; margin-bottom: 20px; padding: 15px; background-color: #e8f5e8; border: 1px solid #2a6f2b; border-radius: 8px; color: #2a6f2b;">
+            <strong>✅ Archivo de Reporte 3 cargado automáticamente</strong>
+            <br><span id="reporte3FileName"></span>
+        </div>
+
+        <form id="calidadForm" enctype="multipart/form-data">
+            <div class="file-inputs">
+                <label for="excelFileReporte3" class="required-label">
+                    📊 Archivo Reporte 3 (Requerido):
+                </label>
+                <input type="file" id="excelFileReporte3" name="excelFileReporte3" accept=".xlsx" required>
+                <small id="reporte3Help" style="color: #6c757d; font-size: 12px; display: block; margin-top: 5px;">
+                    Selecciona el archivo de salida del Paso 3. Los datos se integrarán automáticamente en la hoja Operativo.
+                </small>
+            </div>
+            
+            <button type="button" class="action-button" id="generateBtn">
+                ⭐ Generar Reporte de Calidad
+            </button>
+        </form>
+
+        <div id="status"></div>
+        
+        <div class="navigation">
+            <a href="/paso3" class="nav-button prev">← Anterior</a>
+            <div class="step-progress">Paso 4 de 5</div>
+            <a href="/paso5" class="nav-button next" id="nextStep">Siguiente →</a>
+        </div>
+    </div>
+
+    <script>
+        let reportGenerado = false;
+        let reporte3AutoFile = null;
+
+        // Verificar si hay archivo del paso 3 al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            const reporte3File = sessionStorage.getItem('reporte3_file');
+            if (reporte3File) {
+                reporte3AutoFile = reporte3File;
+                document.getElementById('reporte3Status').style.display = 'block';
+                document.getElementById('reporte3FileName').textContent = `Archivo: ${reporte3File}`;
+                document.getElementById('excelFileReporte3').required = false;
+                document.getElementById('reporte3Help').textContent = 'Archivo cargado automáticamente desde el Paso 3 - También puedes seleccionar otro archivo si lo deseas';
+                // Limpiar sessionStorage después de usar
+                sessionStorage.removeItem('reporte3_file');
+            }
+        });
+
+        document.getElementById('generateBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const reporte3File = document.getElementById('excelFileReporte3').files[0];
+            
+            // Validar que haya al menos un archivo seleccionado
+            if (!reporte3File && !reporte3AutoFile) {
+                showStatus('❌ Por favor selecciona el archivo de Reporte 3', 'error');
+                return;
+            }
+            
+            const button = this;
+            button.disabled = true;
+            button.textContent = '⏳ Procesando...';
+            
+            showStatus('Procesando reporte de calidad... Este proceso puede tomar varios minutos.', 'processing');
+            
+            // Construir FormData
+            const formData = new FormData();
+            
+            // Agregar archivo del Reporte 3 si existe (manual o automático)
+            if (reporte3File) {
+                formData.append('excelFileReporte3', reporte3File);
+            } else if (reporte3AutoFile) {
+                formData.append('reporte3_auto_file', reporte3AutoFile);
+            }
+            
+            // Usar fetch para procesar y luego descargar
+            fetch('/procesar-reporte-calidad', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus(`✅ Reporte generado: ${data.filename}`, 'success');
+                    reportGenerado = true;
+                    updateNextButton();
+                    
+                    // Descargar automáticamente usando el endpoint directo
+                    if (data.temp_file) {
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = `/descargar-reporte4-directo/${data.temp_file}`;
+                        downloadLink.download = data.temp_file;
+                        downloadLink.style.display = 'none';
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                        
+                        showStatus(`✅ Descarga iniciada: ${data.filename}`, 'success');
+                    }
+                } else {
+                    showStatus(`❌ Error: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus('❌ Error al procesar el reporte de calidad', 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = '⭐ Generar Reporte de Calidad';
+            });
+        });
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+        }
+
+        function updateNextButton() {
+            const nextButton = document.getElementById('nextStep');
+            if (reportGenerado) {
+                nextButton.style.opacity = '1';
+                nextButton.style.pointerEvents = 'auto';
+            } else {
+                nextButton.style.opacity = '0.5';
+                nextButton.style.pointerEvents = 'none';
+            }
+        }
+
+        // Función para descargar archivo
+        async function descargarArchivo(tempFile) {
+            try {
+                const response = await fetch('/descargar-reporte4', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({temp_file: tempFile})
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = tempFile;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    const data = await response.json();
+                    showStatus(`Error al descargar: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showStatus('Error de conexión al descargar archivo', 'error');
+            }
+        }
+
+        // Inicializar el estado del botón siguiente
+        updateNextButton();
+    </script>
+</body>
+</html>

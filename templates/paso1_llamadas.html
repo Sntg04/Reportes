@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Paso 1: Reportes de Llamadas</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            margin: 0; 
+            padding: 20px 0; 
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .step-indicator {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .step-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-description {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        .container { 
+            text-align: center; 
+            background-color: #ffffff; 
+            padding: 30px 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); 
+            width: 90%; 
+            max-width: 600px; 
+            margin: 0 auto;
+        }
+        
+        .file-inputs label { 
+            display: block; 
+            font-weight: 600; 
+            color: #333; 
+            margin: 15px 0 5px 0; 
+        }
+        
+        input[type="file"] { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #dddfe2; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+        }
+        
+        .action-button { 
+            display: inline-block; 
+            width: 100%; 
+            padding: 15px 30px; 
+            margin-top: 30px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            background-color: #dc3545; 
+            border: none; 
+            border-radius: 6px; 
+            text-decoration: none; 
+            cursor: pointer; 
+            transition: background-color 0.3s; 
+        }
+        
+        .action-button:hover { background-color: #c82333; }
+        .action-button:disabled { background-color: #a0c7ff; cursor: not-allowed; }
+        
+        #status { 
+            margin-top: 20px; 
+            font-style: italic; 
+            min-height: 20px; 
+            line-height: 1.5; 
+            padding: 10px; 
+            border-radius: 6px; 
+        }
+        
+        .status-success { color: #2a6f2b; background-color: #eaf7e9; }
+        .status-error { color: #a92020; background-color: #fce8e8; }
+        .status-processing { color: #5a7184; background-color: #f0f4f8; }
+        
+        .report-options { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 30px; 
+        }
+        
+        .option-card { 
+            flex: 1; 
+            padding: 20px; 
+            border: 2px solid #dddfe2; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: all 0.3s; 
+            text-align: center; 
+        }
+        
+        .option-card:hover { 
+            border-color: #dc3545; 
+            background-color: #f8f9fa; 
+        }
+        
+        .option-card.active { 
+            border-color: #dc3545; 
+            background-color: #ffe6e6; 
+        }
+        
+        .option-card h3 { 
+            margin: 0 0 10px 0; 
+            color: #333; 
+        }
+        
+        .option-card p { 
+            margin: 0; 
+            color: #666; 
+            font-size: 14px; 
+        }
+        
+        .report-form { 
+            display: none; 
+        }
+        
+        .report-form.active { 
+            display: block; 
+        }
+        
+        .navigation {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .nav-button.prev {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .nav-button.next {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .nav-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .nav-button:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .step-progress {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="step-indicator">Paso 1 de 5</div>
+        <h1 class="step-title">📞 Reportes de Llamadas</h1>
+        <p class="step-description">Generemos los reportes de llamadas para iniciar el proceso</p>
+    </div>
+    
+    <div class="container">
+        <!-- Opciones de reporte -->
+        <div class="report-options">
+            <div class="option-card active" id="reporteNormal">
+                <h3>📊 Reporte Isabel</h3>
+                <p>Reporte por día con totales y efectivas</p>
+            </div>
+            <div class="option-card" id="reporteAgentes">
+                <h3>� Reporte VOIP</h3>
+                <p>Análisis por agente: answered, normal y última llamada</p>
+            </div>
+        </div>
+
+        <!-- Formulario para Reporte Normal -->
+        <div class="report-form active" id="formNormal">
+            <form id="llamadasForm" enctype="multipart/form-data">
+                <div class="file-inputs">
+                    <label for="files">📁 Archivos de Llamadas (Selecciona todos los que necesites):</label>
+                    <input type="file" id="files" name="files" accept=".csv,.xlsx,.xls" multiple required>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Puedes seleccionar múltiples archivos CSV o Excel manteniendo presionado Ctrl (o Cmd en Mac)
+                    </small>
+                    <div id="fileCount" style="margin-top: 10px; color: #dc3545; font-weight: bold; display: none;"></div>
+                </div>
+                
+                <button type="submit" class="action-button" id="generateReportBtn">
+                    🚀 Generar Reporte Isabel
+                </button>
+            </form>
+        </div>
+
+        <!-- Formulario para Reporte VOIP -->
+        <div class="report-form" id="formAgentes">
+            <form id="agentesForm" enctype="multipart/form-data">
+                <div class="file-inputs">
+                    <label for="filesAgentes">📁 Archivos VOIP (Selecciona todos los que necesites):</label>
+                    <input type="file" id="filesAgentes" name="files" accept=".csv,.xlsx,.xls" multiple required>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Los archivos deben contener las columnas: First Call Agent, Ring Type, Begin Time (o sus equivalentes en chino)
+                    </small>
+                    <div id="fileCountAgentes" style="margin-top: 10px; color: #dc3545; font-weight: bold; display: none;"></div>
+                </div>
+                
+                <button type="submit" class="action-button" id="generateAgentesBtn">
+                    � Generar Reporte VOIP
+                </button>
+            </form>
+        </div>
+
+        <div id="status"></div>
+        
+        <!-- Información sobre archivos guardados -->
+        <div id="archivoInfo" style="margin-top: 20px; padding: 15px; background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745; display: none;">
+            <h4 style="margin: 0 0 10px 0; color: #155724;">📁 Archivos guardados para Paso 3</h4>
+            <p style="margin: 0; color: #155724; font-size: 14px;">Los reportes generados se han guardado automáticamente y estarán disponibles en el <strong>Paso 3: Reportería</strong> para integrar con datos de cobranza.</p>
+        </div>
+        
+        <div class="navigation">
+            <a href="/" class="nav-button prev">← Inicio</a>
+            <div class="step-progress">Paso 1 de 5</div>
+            <a href="/paso2" class="nav-button next" id="nextStep">Siguiente →</a>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let reportGenerado = false;
+
+        // Event listeners para mostrar conteo de archivos
+        document.getElementById('files').addEventListener('change', function(e) {
+            const fileCount = e.target.files.length;
+            const countDiv = document.getElementById('fileCount');
+            if (fileCount > 0) {
+                countDiv.textContent = `📊 ${fileCount} archivo(s) seleccionado(s)`;
+                countDiv.style.display = 'block';
+            } else {
+                countDiv.style.display = 'none';
+            }
+        });
+
+        document.getElementById('filesAgentes').addEventListener('change', function(e) {
+            const fileCount = e.target.files.length;
+            const countDiv = document.getElementById('fileCountAgentes');
+            if (fileCount > 0) {
+                countDiv.textContent = `� ${fileCount} archivo(s) seleccionado(s)`;
+                countDiv.style.display = 'block';
+            } else {
+                countDiv.style.display = 'none';
+            }
+        });
+
+        // Manejar selección de tipo de reporte
+        document.getElementById('reporteNormal').addEventListener('click', function() {
+            selectReportType('normal');
+        });
+
+        document.getElementById('reporteAgentes').addEventListener('click', function() {
+            selectReportType('agentes');
+        });
+
+        function selectReportType(type) {
+            // Remover clase active de todas las opciones
+            document.querySelectorAll('.option-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            
+            // Ocultar todos los formularios
+            document.querySelectorAll('.report-form').forEach(form => {
+                form.classList.remove('active');
+            });
+
+            if (type === 'normal') {
+                document.getElementById('reporteNormal').classList.add('active');
+                document.getElementById('formNormal').classList.add('active');
+            } else if (type === 'agentes') {
+                document.getElementById('reporteAgentes').classList.add('active');
+                document.getElementById('formAgentes').classList.add('active');
+            }
+        }
+
+        // Manejar envío del formulario normal
+        document.getElementById('llamadasForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const files = document.getElementById('files').files;
+            
+            if (!files || files.length === 0) {
+                showStatus('Por favor selecciona al menos un archivo.', 'error');
+                return;
+            }
+            
+            // Crear FormData y agregar todos los archivos
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            
+            generateReport('/procesar-llamadas-isabel', formData, 'generateReportBtn');
+        });
+
+        // Manejar envío del formulario agentes
+        document.getElementById('agentesForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const files = document.getElementById('filesAgentes').files;
+            
+            if (!files || files.length === 0) {
+                showStatus('Por favor selecciona al menos un archivo.', 'error');
+                return;
+            }
+            
+            // Crear FormData y agregar todos los archivos
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            
+            generateReport('/procesar-reporte-agentes', formData, 'generateAgentesBtn');
+        });
+
+        function generateReport(endpoint, formData, buttonId) {
+            const button = document.getElementById(buttonId);
+            button.disabled = true;
+            button.textContent = '⏳ Procesando...';
+            
+            showStatus('Procesando archivos...', 'processing');
+            
+            fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                console.log('Content-Type:', response.headers.get('content-type'));
+                
+                // Si la respuesta no es OK, manejar como error
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || `Error ${response.status}`);
+                    });
+                }
+                
+                // Verificar el tipo de contenido
+                const contentType = response.headers.get('content-type') || '';
+                
+                // Si es un archivo Excel o descarga, manejarlo como blob
+                if (contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || 
+                    contentType.includes('application/octet-stream') ||
+                    response.headers.get('Content-Disposition')) {
+                    
+                    return response.blob().then(blob => {
+                        // Crear URL para descargar el archivo
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        
+                        // Obtener el nombre del archivo del header Content-Disposition
+                        const disposition = response.headers.get('Content-Disposition');
+                        let filename = 'reporte.xlsx';
+                        if (disposition && disposition.includes('filename=')) {
+                            const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                            if (filenameMatch && filenameMatch[1]) {
+                                filename = filenameMatch[1].replace(/['"]/g, '');
+                            }
+                        }
+                        
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        
+                        return { success: true, filename: filename };
+                    });
+                } 
+                // Si parece ser JSON, intentar parsearlo
+                else if (contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (!data.success) {
+                            throw new Error(data.message || 'Error desconocido');
+                        }
+                        return data;
+                    });
+                }
+                // Para cualquier otro caso, tratarlo como descarga
+                else {
+                    return response.blob().then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'reporte.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        return { success: true, filename: 'reporte.xlsx' };
+                    });
+                }
+            })
+            .then(data => {
+                if (data && data.success) {
+                    showStatus(`✅ Reporte generado exitosamente: ${data.filename}`, 'success');
+                    reportGenerado = true;
+                    updateNextButton();
+                    
+                    // Mostrar información sobre archivo guardado
+                    mostrarInfoArchivoGuardado();
+                }
+            })
+            .catch(error => {
+                console.error('Error completo:', error);
+                console.error('Error stack:', error.stack);
+                console.error('Error message:', error.message);
+                showStatus(`❌ Error: ${error.message || 'Error al procesar el archivo'}`, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = button.id === 'generateReportBtn' ? '🚀 Generar Reporte Normal' : '🚀 Generar Reporte Void';
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+        }
+
+        function updateNextButton() {
+            const nextButton = document.getElementById('nextStep');
+            if (reportGenerado) {
+                nextButton.style.opacity = '1';
+                nextButton.style.pointerEvents = 'auto';
+            } else {
+                nextButton.style.opacity = '0.5';
+                nextButton.style.pointerEvents = 'none';
+            }
+        }
+
+        function mostrarInfoArchivoGuardado() {
+            const infoDiv = document.getElementById('archivoInfo');
+            if (infoDiv) {
+                infoDiv.style.display = 'block';
+                
+                // Hacer scroll suave hacia la información
+                setTimeout(() => {
+                    infoDiv.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'nearest' 
+                    });
+                }, 500);
+            }
+        }
+
+        // Inicializar el estado del botón siguiente
+        updateNextButton();
+    </script>
+</body>
+</html>

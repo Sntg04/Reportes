@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Paso 2: Admin Cobranza</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            margin: 0; 
+            padding: 20px 0; 
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .step-indicator {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .step-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-description {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        .container { 
+            text-align: center; 
+            background-color: #ffffff; 
+            padding: 30px 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); 
+            width: 90%; 
+            max-width: 600px; 
+            margin: 0 auto;
+        }
+        
+        .file-inputs { 
+            margin: 30px 0; 
+            text-align: left; 
+        }
+        
+        .file-inputs label { 
+            display: block; 
+            font-weight: 600; 
+            color: #333; 
+            margin: 15px 0 5px 0; 
+        }
+        
+        input[type="file"] { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #dddfe2; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+        }
+        
+        .action-button { 
+            display: inline-block; 
+            width: 100%; 
+            padding: 15px 30px; 
+            margin-top: 30px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            background-color: #dc3545; 
+            border: none; 
+            border-radius: 6px; 
+            text-decoration: none; 
+            cursor: pointer; 
+            transition: background-color 0.3s; 
+        }
+        
+        .action-button:hover { background-color: #c82333; }
+        .action-button:disabled { background-color: #a0d9a0; cursor: not-allowed; }
+        
+        #status { 
+            margin-top: 20px; 
+            font-style: italic; 
+            min-height: 20px; 
+            line-height: 1.5; 
+            padding: 10px; 
+            border-radius: 6px; 
+        }
+        
+        .status-success { color: #2a6f2b; background-color: #eaf7e9; }
+        .status-error { color: #a92020; background-color: #fce8e8; }
+        .status-processing { color: #5a7184; background-color: #f0f4f8; }
+        
+        .navigation {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        
+        .nav-button.prev {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .nav-button.next {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .nav-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .nav-button:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .step-progress {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="step-indicator">Paso 2 de 5</div>
+        <h1 class="step-title">💼 Admin Cobranza</h1>
+        <p class="step-description">Procesemos los reportes administrativos de cobranza</p>
+    </div>
+    
+    <div class="container">
+        <form id="adminCobranzaForm" enctype="multipart/form-data">
+            <div class="file-inputs">
+                <label for="adminFile">Archivo Admin:</label>
+                <input type="file" id="adminFile" name="adminFile" accept=".xlsx,.csv" required>
+                
+                <label for="asistenciaFile">Archivo Asistencia:</label>
+                <input type="file" id="asistenciaFile" name="asistenciaFile" accept=".xlsx,.csv" required>
+            </div>
+            
+            <button type="submit" class="action-button" id="generateBtn">
+                💼 Generar Reporte Admin Cobranza
+            </button>
+        </form>
+
+        <div id="status"></div>
+        
+        <div class="navigation">
+            <a href="/paso1" class="nav-button prev">← Anterior</a>
+            <div class="step-progress">Paso 2 de 5</div>
+            <a href="/paso3" class="nav-button next" id="nextStep">Siguiente →</a>
+        </div>
+    </div>
+
+    <script>
+        let reportGenerado = false;
+
+        document.getElementById('adminCobranzaForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const adminFile = document.getElementById('adminFile').files[0];
+            const asistenciaFile = document.getElementById('asistenciaFile').files[0];
+            
+            if (!adminFile || !asistenciaFile) {
+                showStatus('Por favor selecciona ambos archivos.', 'error');
+                return;
+            }
+            
+            const button = document.getElementById('generateBtn');
+            button.disabled = true;
+            button.textContent = '⏳ Procesando...';
+            
+            showStatus('Procesando archivos...', 'processing');
+            
+            const formData = new FormData(this);
+            
+            fetch('/procesar-admin-cobranza', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || `Error ${response.status}`);
+                    });
+                }
+                
+                return response.blob().then(blob => {
+                    // Crear URL para descargar el archivo
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    
+                    // Obtener el nombre del archivo del header Content-Disposition
+                    const disposition = response.headers.get('Content-Disposition');
+                    let filename = 'reporte_admin_cobranza.xlsx';
+                    if (disposition && disposition.includes('filename=')) {
+                        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    return { success: true, filename: filename };
+                });
+            })
+            .then(data => {
+                if (data && data.success) {
+                    showStatus(`✅ Reporte generado exitosamente: ${data.filename}`, 'success');
+                    reportGenerado = true;
+                    updateNextButton();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus(`❌ Error al procesar el archivo: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = '💼 Generar Reporte Admin Cobranza';
+            });
+        });
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+        }
+
+        function updateNextButton() {
+            const nextButton = document.getElementById('nextStep');
+            if (reportGenerado) {
+                nextButton.style.opacity = '1';
+                nextButton.style.pointerEvents = 'auto';
+            } else {
+                nextButton.style.opacity = '0.5';
+                nextButton.style.pointerEvents = 'none';
+            }
+        }
+
+        // Inicializar el estado del botón siguiente
+        updateNextButton();
+    </script>
+</body>
+</html>

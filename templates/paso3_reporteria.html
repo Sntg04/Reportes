@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportería Final Consolidada</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f4f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; }
+        .container { text-align: center; background-color: #ffffff; padding: 30px 40px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1); width: 90%; max-width: 550px; }
+        h1 { color: #1c3d5a; margin-bottom: 10px; }
+        p { color: #5a7184; margin-bottom: 30px; }
+        .file-inputs label { display: block; font-weight: 600; color: #333; margin: 15px 0 5px 0; text-align: left;}
+        input[type="file"] { width: 100%; padding: 12px; border: 1px solid #d1d9e6; border-radius: 8px; box-sizing: border-box; background-color: #f8fafc; }
+        .action-button { display: inline-block; width: 100%; padding: 15px 30px; margin-top: 30px; font-size: 18px; font-weight: bold; color: #ffffff; background-color: #e6007e; border: none; border-radius: 8px; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .action-button:hover { background-color: #c3006a; }
+        .action-button:disabled { background-color: #f2a4d1; cursor: not-allowed; }
+        .action-button.blue { background-color: #4a90e2; }
+        .action-button.blue:hover { background-color: #357abd; }
+        .action-button.blue:disabled { background-color: #a8c8ed; cursor: not-allowed; }
+        #status { margin-top: 20px; font-style: italic; min-height: 20px; line-height: 1.5; padding: 10px; border-radius: 6px; }
+        .status-success { color: #2a6f2b; background-color: #eaf7e9; }
+        .status-error { color: #a92020; background-color: #fce8e8; }
+        .status-processing { color: #5a7184; background-color: #f0f4f8; }
+        a.back-link { display: block; margin-top: 25px; color: #007aff; text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reportería Final</h1>
+        <p>Sube los 2 reportes generados para consolidarlos.</p>
+
+        <div class="file-inputs">
+            <label for="reporteAdminFile">1. Archivo del Reporte de Cobranzas (del paso 2)</label>
+            <input type="file" id="reporteAdminFile" accept=".xlsx">
+            <label for="reporteLlamadasFile">2. Archivo del Reporte de Llamadas (del paso 1)</label>
+            <input type="file" id="reporteLlamadasFile" accept=".xlsx">
+        </div>
+        
+        <button id="processBtn" class="action-button">Generar Reporte Final</button>
+
+        <div id="status"></div>
+
+        <!-- Sección para actualizar base de asesores -->
+        <hr style="margin: 40px 0; border: none; height: 1px; background-color: #d1d9e6;">
+        <h3 style="color: #1c3d5a; margin-bottom: 15px;">Actualizar Base de Asesores</h3>
+        <p style="color: #5a7184; margin-bottom: 20px; font-size: 14px;">
+            Sube un archivo Excel o CSV con la base de asesores actualizada.<br>
+            <strong>Columnas requeridas:</strong> Fecha Ingreso, Fecha, Cedula, ID, EXT, VOIP, Nombre, Sede, Ubicación
+        </p>
+
+        <div class="file-inputs">
+            <label for="baseAsesorFile">Archivo de Base de Asesores (Excel/CSV)</label>
+            <input type="file" id="baseAsesorFile" accept=".xlsx,.csv">
+        </div>
+        
+        <button id="updateBaseBtn" class="action-button blue" style="margin-top: 15px;">Actualizar Base de Asesores</button>
+
+        <div id="updateStatus"></div>
+
+        <a href="/" class="back-link">← Volver al Menú Principal</a>
+    </div>
+
+    <script>
+        // Verificar estado de archivos al cargar la página
+        async function verificarArchivosDisponibles() {
+            console.log('🔍 Iniciando verificación de archivos...');
+            try {
+                const response = await fetch('/verificar-archivos-paso3');
+                console.log('📡 Respuesta del servidor:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('📊 Datos recibidos:', data);
+                    
+                    const statusAdmin = document.getElementById('statusAdmin');
+                    const statusLlamadas = document.getElementById('statusLlamadas');
+                    const manualUploadSection = document.getElementById('manualUploadSection');
+                    const adminUploadContainer = document.getElementById('adminUploadContainer');
+                    const llamadasUploadContainer = document.getElementById('llamadasUploadContainer');
+                    
+                    let necesitaSubidaManual = false;
+                    
+                    // Actualizar estado del archivo Admin
+                    if (data.admin && data.admin.disponible) {
+                        const nombreArchivo = data.admin.nombre || 'Archivo Admin';
+                        statusAdmin.innerHTML = `📄 Reporte Admin Cobranza: <span style="color: #2a6f2b; font-weight: bold;">✅ Seleccionado: ${nombreArchivo}</span>`;
+                        statusAdmin.style.backgroundColor = '#eaf7e9';
+                        statusAdmin.style.border = '1px solid #2a6f2b';
+                        adminUploadContainer.style.display = 'none';
+                        console.log('✅ Archivo Admin disponible:', nombreArchivo);
+                    } else {
+                        statusAdmin.innerHTML = '📄 Reporte Admin Cobranza: <span style="color: #e67e22; font-weight: bold;">⚠️ Requerido - disponible para subida manual</span>';
+                        statusAdmin.style.backgroundColor = '#fef3e2';
+                        statusAdmin.style.border = '1px solid #e67e22';
+                        necesitaSubidaManual = true;
+                        adminUploadContainer.style.display = 'block';
+                        console.log('⚠️ Archivo Admin no disponible');
+                    }
+                    
+                    // Actualizar estado del archivo Llamadas
+                    if (data.isabel && data.isabel.disponible) {
+                        const nombreArchivo = data.isabel.nombre || 'Archivo Isabel';
+                        statusLlamadas.innerHTML = `📄 Reporte Llamadas: <span style="color: #2a6f2b; font-weight: bold;">✅ Seleccionado: ${nombreArchivo} (Isabel)</span>`;
+                        statusLlamadas.style.backgroundColor = '#eaf7e9';
+                        statusLlamadas.style.border = '1px solid #2a6f2b';
+                        llamadasUploadContainer.style.display = 'none';
+                        console.log('✅ Archivo Isabel disponible:', nombreArchivo);
+                    } else if (data.voip && data.voip.disponible) {
+                        const nombreArchivo = data.voip.nombre || 'Archivo VOIP';
+                        statusLlamadas.innerHTML = `📄 Reporte Llamadas: <span style="color: #2a6f2b; font-weight: bold;">✅ Seleccionado: ${nombreArchivo} (VOIP)</span>`;
+                        statusLlamadas.style.backgroundColor = '#eaf7e9';
+                        statusLlamadas.style.border = '1px solid #2a6f2b';
+                        llamadasUploadContainer.style.display = 'none';
+                        console.log('✅ Archivo VOIP disponible:', nombreArchivo);
+                    } else {
+                        statusLlamadas.innerHTML = '📄 Reporte Llamadas: <span style="color: #e67e22; font-weight: bold;">⚠️ Requerido - disponible para subida manual</span>';
+                        statusLlamadas.style.backgroundColor = '#fef3e2';
+                        statusLlamadas.style.border = '1px solid #e67e22';
+                        necesitaSubidaManual = true;
+                        llamadasUploadContainer.style.display = 'block';
+                        console.log('⚠️ Archivos de llamadas no disponibles');
+                    }
+                    
+                    // Mostrar/ocultar sección de subida manual
+                    if (necesitaSubidaManual) {
+                        manualUploadSection.style.display = 'block';
+                        document.getElementById('processBtn').textContent = 'Generar Reporte Final';
+                    } else {
+                        manualUploadSection.style.display = 'none';
+                        document.getElementById('processBtn').textContent = '🎯 Generar Reporte Final Consolidado';
+                        // Agregar mensaje de confirmación
+                        const confirmMessage = document.createElement('div');
+                        confirmMessage.style.cssText = 'margin: 15px 0; padding: 15px; background-color: #eaf7e9; border: 1px solid #2a6f2b; border-radius: 8px; text-align: center; color: #2a6f2b; font-weight: bold;';
+                        confirmMessage.innerHTML = '🎉 ¡Todos los archivos están listos! Puedes generar el reporte final directamente.';
+                        manualUploadSection.parentNode.insertBefore(confirmMessage, manualUploadSection.nextSibling);
+                    }
+                    
+                } else {
+                    console.error('Error verificando archivos disponibles');
+                }
+            } catch (error) {
+                console.error('Error de conexión verificando archivos:', error);
+            }
+        }
+
+        // Verificar archivos al cargar la página
+        document.addEventListener('DOMContentLoaded', verificarArchivosDisponibles);
+
+        const btn = document.getElementById('processBtn');
+        const statusDiv = document.getElementById('status');
+
+        btn.addEventListener('click', async () => {
+            // La validación ahora permite procesar sin archivos si están disponibles de pasos anteriores
+            const adminInput = document.getElementById('reporteAdminFile');
+            const llamadasInput = document.getElementById('reporteLlamadasFile');
+            
+            btn.disabled = true;
+            statusDiv.className = 'status-processing';
+            statusDiv.textContent = 'El servidor está consolidando los reportes... ⚙️';
+
+            const formData = new FormData();
+            // Solo agregar archivos si están seleccionados
+            if (adminInput.files[0]) {
+                formData.append('reporteAdminFile', adminInput.files[0]);
+            }
+            if (llamadasInput.files[0]) {
+                formData.append('reporteLlamadasFile', llamadasInput.files[0]);
+            }
+
+            try {
+                const response = await fetch('/procesar-reporteria-cobranza', { method: 'POST', body: formData });
+
+                if (response.ok) {
+                    // Verificar si la respuesta es JSON (nuevo formato) o binario (formato anterior)
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        // Nuevo formato con opciones
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            statusDiv.className = 'status-success';
+                            statusDiv.innerHTML = `<strong>✅ ${data.message}</strong><br>Hojas procesadas: ${data.hojas_procesadas}`;
+                            
+                            // Mostrar botones de acción y guardar el nombre del archivo
+                            mostrarOpcionesReporte(data.temp_file, data.download_name);
+                        } else {
+                            statusDiv.className = 'status-error';
+                            statusDiv.textContent = `❌ ${data.message}`;
+                        }
+                    } else {
+                        // Formato anterior (binario) - descargar directamente
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'Reporteria_Final_Consolidada.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                        statusDiv.className = 'status-success';
+                        statusDiv.innerHTML = '<strong>✅ ¡Reporte final generado con éxito!</strong>';
+                    }
+                } else {
+                    statusDiv.className = 'status-error';
+                    statusDiv.textContent = `❌ Error del servidor: ${await response.text()}`;
+                }
+            } catch (error) {
+                statusDiv.className = 'status-error';
+                statusDiv.textContent = '❌ Error de conexión con el servidor.';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Función para mostrar opciones después de procesar el reporte
+        function mostrarOpcionesReporte(tempFile, downloadName = '3_Reporte_Reporteria.xlsx') {
+            // Limpiar botones existentes
+            const existingActions = document.getElementById('reportActions');
+            if (existingActions) {
+                existingActions.remove();
+            }
+            
+            // Crear contenedor de acciones
+            const actionsContainer = document.createElement('div');
+            actionsContainer.id = 'reportActions';
+            actionsContainer.style.cssText = 'margin-top: 20px; padding: 20px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #d1d9e6;';
+            
+            actionsContainer.innerHTML = `
+                <h3 style="color: #1c3d5a; margin-bottom: 15px; text-align: center;">¿Qué deseas hacer ahora?</h3>
+                <div style="display: flex; gap: 15px; flex-direction: column;">
+                    <button id="downloadBtn" class="action-button" style="margin: 0; background-color: #28a745;">
+                        📥 Descargar Reporte Final
+                    </button>
+                    <button id="continueBtn" class="action-button" style="margin: 0; background-color: #e6007e;">
+                        ➡️ Continuar al Paso 4 (Reporte de Calidad)
+                    </button>
+                </div>
+            `;
+            
+            // Insertar después del status
+            statusDiv.parentNode.insertBefore(actionsContainer, statusDiv.nextSibling);
+            
+            // Agregar event listeners (pasar el nombre del archivo)
+            document.getElementById('downloadBtn').addEventListener('click', () => descargarReporte(tempFile, downloadName));
+            document.getElementById('continueBtn').addEventListener('click', () => continuarAPaso4(tempFile));
+        }
+        
+        // Función para descargar el reporte
+        async function descargarReporte(tempFile, downloadName = '3_Reporte_Reporteria.xlsx') {
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Descargando...';
+            
+            try {
+                const response = await fetch('/descargar-reporte3', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({temp_file: tempFile})
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = downloadName;  // Usar el nombre dinámico
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    const data = await response.json();
+                    alert(`Error al descargar: ${data.message}`);
+                }
+            } catch (error) {
+                alert('Error de conexión al descargar archivo');
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = '📥 Descargar Reporte Final';
+            }
+        }
+        
+        // Función para continuar al paso 4
+        async function continuarAPaso4(tempFile) {
+            const continueBtn = document.getElementById('continueBtn');
+            continueBtn.disabled = true;
+            continueBtn.textContent = 'Preparando Paso 4...';
+            
+            try {
+                const response = await fetch('/continuar-a-paso4', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({temp_file: tempFile})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Guardar información temporal para el paso 4
+                    sessionStorage.setItem('reporte3_file', tempFile);
+                    // Redirigir al paso 4
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                alert('Error de conexión al continuar al paso 4');
+            } finally {
+                continueBtn.disabled = false;
+                continueBtn.textContent = '➡️ Continuar al Paso 4 (Reporte de Calidad)';
+            }
+        }
+
+        // Funcionalidad para actualizar base de asesores
+        const updateBtn = document.getElementById('updateBaseBtn');
+        const updateStatusDiv = document.getElementById('updateStatus');
+
+        updateBtn.addEventListener('click', async () => {
+            const baseInput = document.getElementById('baseAsesorFile');
+
+            if (!baseInput.files[0]) {
+                updateStatusDiv.className = 'status-error';
+                updateStatusDiv.textContent = 'Por favor, selecciona el archivo de base de asesores.';
+                return;
+            }
+            
+            updateBtn.disabled = true;
+            updateStatusDiv.className = 'status-processing';
+            updateStatusDiv.textContent = 'Actualizando base de asesores... ⚙️';
+
+            const formData = new FormData();
+            formData.append('baseAsesorFile', baseInput.files[0]);
+
+            try {
+                const response = await fetch('/actualizar-base-asesores', { method: 'POST', body: formData });
+                const responseText = await response.text();
+
+                if (response.ok) {
+                    updateStatusDiv.className = 'status-success';
+                    updateStatusDiv.innerHTML = `<strong>${responseText}</strong>`;
+                } else {
+                    updateStatusDiv.className = 'status-error';
+                    updateStatusDiv.textContent = `❌ ${responseText}`;
+                }
+            } catch (error) {
+                updateStatusDiv.className = 'status-error';
+                updateStatusDiv.textContent = '❌ Error de conexión con el servidor.';
+            } finally {
+                updateBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
