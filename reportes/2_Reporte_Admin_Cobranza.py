@@ -222,6 +222,57 @@ def extract_cartera_from_gerencia_and_rango(gerencia_text: str, rango_text: str)
 # ==============================================================================
 # FUNCIONES DE DETECCIÓN Y CLASIFICACIÓN
 # ==============================================================================
+def filtrar_por_estado_asistencia(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filtra el archivo de asistencia eliminando registros con estado 'ausente' o similar
+    
+    Args:
+        df (pd.DataFrame): DataFrame de asistencia
+        
+    Returns:
+        pd.DataFrame: DataFrame filtrado sin registros ausentes
+    """
+    df_filtrado = df.copy()
+    
+    # Buscar la columna Estado (columna G, que es la posición 6 en base 0)
+    estado_col = None
+    
+    # Primero intentar buscar por nombre de columna
+    posibles_nombres_estado = ['Estado', 'ESTADO', 'estado', 'Status', 'STATUS']
+    for nombre in posibles_nombres_estado:
+        if nombre in df_filtrado.columns:
+            estado_col = nombre
+            break
+    
+    # Si no se encuentra por nombre, usar la posición G (columna 6)
+    if estado_col is None:
+        if len(df_filtrado.columns) > 6:
+            estado_col = df_filtrado.columns[6]  # Columna G (posición 6)
+        else:
+            print(f"ADVERTENCIA: No se encontró columna Estado. Columnas disponibles: {list(df_filtrado.columns)}")
+            return df_filtrado
+    
+    if estado_col in df_filtrado.columns:
+        # Valores a filtrar (ausente y similares)
+        estados_a_excluir = [
+            'ausente', 'AUSENTE', 'Ausente',
+            'ausencia', 'AUSENCIA', 'Ausencia',
+            'falta', 'FALTA', 'Falta',
+            'no asistio', 'NO ASISTIO', 'No Asistio',
+            'no asistió', 'NO ASISTIÓ', 'No Asistió'
+        ]
+        
+        # Filtrar registros antes del procesamiento
+        filas_antes = len(df_filtrado)
+        df_filtrado = df_filtrado[~df_filtrado[estado_col].astype(str).str.strip().isin(estados_a_excluir)]
+        filas_despues = len(df_filtrado)
+        
+        print(f"INFO: Filtro por Estado aplicado. Registros eliminados: {filas_antes - filas_despues}")
+        print(f"INFO: Registros restantes para procesamiento: {filas_despues}")
+    
+    return df_filtrado
+
+
 def detectar_archivo_asistencia(df: pd.DataFrame) -> bool:
     """
     Detecta si un DataFrame corresponde al archivo de asistencia
@@ -301,17 +352,18 @@ def aplicar_filtros_exclusion(df: pd.DataFrame) -> pd.DataFrame:
 # ==============================================================================
 def convert_time_format(value: Union[str, pd.Timestamp, None]) -> str:
     """
-    Convierte diferentes formatos de tiempo a formato 12 horas con AM/PM (sin segundos)
+    Convierte diferentes formatos de tiempo a formato de 12 horas con AM/PM y segundos
     
     Args:
         value (Union[str, pd.Timestamp, None]): Valor de tiempo a convertir
         
     Returns:
-        str: Tiempo formateado en 12 horas con AM/PM o cadena vacía si no válido
+        str: Tiempo formateado como H:MM:SS AM/PM o cadena vacía si no válido
         
     Example:
-        convert_time_format("14:30:00") -> "2:30 PM"
-        convert_time_format("08:15:30") -> "8:15 AM"
+        convert_time_format("14:30:45") -> "2:30:45 PM"
+        convert_time_format("08:15:30") -> "8:15:30 AM"
+        convert_time_format("2025-09-06 07:28:24") -> "7:28:24 AM"
     """
     if pd.isna(value) or value == '' or value is None:
         return ''
@@ -319,38 +371,52 @@ def convert_time_format(value: Union[str, pd.Timestamp, None]) -> str:
     try:
         value_str = str(value).strip()
         
+        # Si ya tiene AM/PM, devolverlo como está
+        if 'AM' in value_str.upper() or 'PM' in value_str.upper():
+            return value_str
+        
         # Si es timestamp completo como "2025-09-06 07:28:24"
         if ' ' in value_str and ':' in value_str:
             time_part = value_str.split(' ')[1]  # "07:28:24"
-            hour, minute = time_part.split(':')[:2]  # Solo tomamos hora y minuto
-            hour = int(hour)
-            
-            # Convertir a 12 horas con AM/PM (sin segundos)
-            if hour == 0:
-                return f"12:{minute} AM"
-            elif hour < 12:
-                return f"{hour}:{minute} AM"
-            elif hour == 12:
-                return f"12:{minute} PM"
-            else:
-                return f"{hour-12}:{minute} PM"
+            parts = time_part.split(':')
+            if len(parts) >= 3:
+                # Formato completo con segundos
+                hour = int(parts[0])
+                minute = parts[1].zfill(2)
+                second = parts[2].zfill(2)
+                period = 'AM' if hour < 12 else 'PM'
+                hour_12 = hour if hour <= 12 else hour - 12
+                hour_12 = 12 if hour_12 == 0 else hour_12
+                return f"{hour_12}:{minute}:{second} {period}"
+            elif len(parts) == 2:
+                # Sin segundos, agregar :00
+                hour = int(parts[0])
+                minute = parts[1].zfill(2)
+                period = 'AM' if hour < 12 else 'PM'
+                hour_12 = hour if hour <= 12 else hour - 12
+                hour_12 = 12 if hour_12 == 0 else hour_12
+                return f"{hour_12}:{minute}:00 {period}"
         
-        # Si es solo hora como "08:34:58"
+        # Si es solo hora como "08:34:58" o "8:34:58"
         elif ':' in value_str:
             parts = value_str.split(':')
-            if len(parts) >= 2:
+            if len(parts) >= 3:
+                # Formato completo con segundos
                 hour = int(parts[0])
-                minute = parts[1]
-                
-                # Convertir a 12 horas con AM/PM (sin segundos)
-                if hour == 0:
-                    return f"12:{minute} AM"
-                elif hour < 12:
-                    return f"{hour}:{minute} AM"
-                elif hour == 12:
-                    return f"12:{minute} PM"
-                else:
-                    return f"{hour-12}:{minute} PM"
+                minute = parts[1].zfill(2)
+                second = parts[2].zfill(2)
+                period = 'AM' if hour < 12 else 'PM'
+                hour_12 = hour if hour <= 12 else hour - 12
+                hour_12 = 12 if hour_12 == 0 else hour_12
+                return f"{hour_12}:{minute}:{second} {period}"
+            elif len(parts) == 2:
+                # Sin segundos, agregar :00
+                hour = int(parts[0])
+                minute = parts[1].zfill(2)
+                period = 'AM' if hour < 12 else 'PM'
+                hour_12 = hour if hour <= 12 else hour - 12
+                hour_12 = 12 if hour_12 == 0 else hour_12
+                return f"{hour_12}:{minute}:00 {period}"
         
         # Si no hay formato reconocible pero no está vacío, devolver tal como está
         if value_str and value_str != 'nan':
@@ -659,6 +725,9 @@ def procesar_admin_cobranza() -> Union[str, tuple]:
         # Validar columnas requeridas
         if not all(col in asistencia_df.columns for col in ['Fecha', 'ID']):
             return "Error: El archivo de asistencia debe tener las columnas 'Fecha' e 'ID'.", 400
+
+        # FILTRAR POR ESTADO: Eliminar registros ausentes antes del cruce
+        asistencia_df = filtrar_por_estado_asistencia(asistencia_df)
 
         # Procesar datos de asistencia
         asistencia_df['Fecha'] = pd.to_datetime(asistencia_df['Fecha'], errors='coerce')

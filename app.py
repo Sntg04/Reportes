@@ -5,8 +5,9 @@ Aplicación modular que integra múltiples procesadores de reportes
 
 import logging
 import os
+from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, send_file
+from flask import Flask, render_template, send_file, request, jsonify
 from utils.file_utils import setup_logging
 
 # Importar procesadores de reportes
@@ -128,6 +129,16 @@ def endpoint_descargar_reporte3():
 def endpoint_continuar_paso4():
     """Endpoint para continuar al paso 4 con el archivo del Reporte 3"""
     return continuar_a_paso4()
+
+@app.route('/test-connection', methods=['GET', 'POST'])
+def test_connection():
+    """Endpoint de prueba para verificar conectividad"""
+    return jsonify({
+        'status': 'success',
+        'message': 'Conexión OK',
+        'method': request.method,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    })
 
 @app.route('/procesar-reporte-calidad', methods=['POST'])
 @handle_errors

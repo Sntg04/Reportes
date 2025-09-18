@@ -188,6 +188,11 @@
             <button type="button" class="action-button" id="generateBtn">
                 ⭐ Generar Reporte de Calidad
             </button>
+            
+            <!-- Botón temporal para pruebas de conectividad -->
+            <button type="button" class="action-button" id="testBtn" style="background-color: #007bff; margin-top: 10px;">
+                🔍 Probar Conectividad
+            </button>
         </form>
 
         <div id="status"></div>
@@ -228,6 +233,13 @@
                 showStatus('❌ Por favor selecciona el archivo de Reporte 3', 'error');
                 return;
             }
+
+        // Event listener para botón de prueba de conectividad
+        document.getElementById('testBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            testConnection();
+        });
             
             const button = this;
             button.disabled = true;
@@ -325,6 +337,34 @@
                 }
             } catch (error) {
                 showStatus('Error de conexión al descargar archivo', 'error');
+            }
+        }
+
+        // Función para probar conectividad
+        async function testConnection() {
+            try {
+                console.log('🔍 Probando conectividad...');
+                showStatus('🔍 Probando conectividad POST...', 'processing');
+                
+                const response = await fetch('/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({test: true})
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Respuesta del servidor:', data);
+                    showStatus(`✅ Conectividad OK - ${data.message}`, 'success');
+                } else {
+                    console.error('❌ Error en la respuesta:', response.status);
+                    showStatus(`❌ Error de respuesta: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error de conectividad:', error);
+                showStatus(`❌ Error de conectividad: ${error.message}`, 'error');
             }
         }
 

@@ -24,6 +24,7 @@ EXCEL_EPOCH_THRESHOLD = 40000
 DEFAULT_SHEET_NAME = 'Información'
 TABLE_STYLE = "TableStyleMedium12"
 MAX_COLUMN_WIDTH = 50
+FORMATO_HORA = 'h:mm:ss AM/PM'  # Formato de hora con segundos y AM/PM
 
 # Columnas esperadas en archivos
 REQUIRED_ASESOR_COLUMNS = [
@@ -174,13 +175,21 @@ def limpiar_fecha(fecha_str: str) -> str:
     
     fecha_str = str(fecha_str).strip()
     
+    # Si ya está en formato DD/MM/YYYY, devolverlo
+    if len(fecha_str) == 10 and fecha_str.count('/') == 2:
+        parts = fecha_str.split('/')
+        if len(parts) == 3 and len(parts[0]) <= 2 and len(parts[1]) <= 2 and len(parts[2]) == 4:
+            return fecha_str
+    
     # Probar varios formatos de fecha posibles
     formatos = [
         '%Y-%m-%d',      # 2025-08-04
+        '%Y-%m-%d %H:%M:%S',  # 2025-08-04 12:00:00 (datetime completo)
         '%d/%m/%Y',      # 04/08/2025
         '%d-%m-%Y',      # 04-08-2025
         '%Y/%m/%d',      # 2025/08/04
         '%m/%d/%Y',      # 08/04/2025
+        '%d.%m.%Y',      # 04.08.2025
     ]
     
     for formato in formatos:
@@ -190,7 +199,15 @@ def limpiar_fecha(fecha_str: str) -> str:
         except ValueError:
             continue
     
+    # Intentar con pandas como última opción
+    try:
+        fecha_obj = pd.to_datetime(fecha_str, errors='raise')
+        return fecha_obj.strftime('%d/%m/%Y')
+    except:
+        pass
+    
     # Si no se puede parsear, devolver el valor original
+    print(f"ADVERTENCIA: No se pudo convertir fecha: '{fecha_str}'")
     return fecha_str
 
 def convertir_fecha_formato(fecha_str: str) -> str:
@@ -322,7 +339,7 @@ def normalizar_valor_mora(valor_mora: Any) -> Any:
     return valor_str.replace(' ', '-')
 
 def convertir_hora_formato(hora_str: Any) -> str:
-    """Convierte horas al formato de 12 horas con AM/PM, igual que en el Reporte 1"""
+    """Convierte horas al formato de 12 horas con segundos y AM/PM"""
     if not hora_str or pd.isna(hora_str) or hora_str == '' or hora_str is None:
         return ''
     
@@ -344,14 +361,14 @@ def convertir_hora_formato(hora_str: Any) -> str:
         for formato in formatos_hora:
             try:
                 hora_obj = datetime.strptime(hora_str, formato)
-                return hora_obj.strftime('%I:%M %p').lstrip('0')  # Remover cero inicial
+                return hora_obj.strftime('%I:%M:%S %p').lstrip('0')  # Formato 12 horas con segundos y AM/PM
             except ValueError:
                 continue
         
         # Si ningún formato funciona, intentar con pandas
         hora_obj = pd.to_datetime(hora_str, errors='coerce')
         if not pd.isna(hora_obj):
-            return hora_obj.strftime('%I:%M %p').lstrip('0')
+            return hora_obj.strftime('%I:%M:%S %p').lstrip('0')
             
         return hora_str
         
@@ -492,6 +509,14 @@ def apply_excel_formatting(worksheet: Any, dataframe: pd.DataFrame, sheet_name: 
                 # Columna % Cuentas
                 percent_cuentas_cell = f"{column_letters['% Cuentas']}{row_num}"
                 worksheet[percent_cuentas_cell].number_format = percent_format
+        
+        # Formato de hora para las columnas de tiempo
+        time_columns = ['Logueo', 'Ultimo Toque']
+        for time_col in time_columns:
+            if time_col in column_letters:
+                for row_num in range(2, worksheet.max_row + 1):
+                    time_cell = f"{column_letters[time_col]}{row_num}"
+                    worksheet[time_cell].number_format = FORMATO_HORA
         
         # Centrar contenido en todas las celdas
         for row in worksheet.iter_rows():

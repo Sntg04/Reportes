@@ -63,7 +63,7 @@ COLUMNAS_CHINAS_MAPEO = {
 # Configuración de Excel
 TABLA_ESTILO = "TableStyleMedium12"
 FORMATO_NUMERO = '0'
-FORMATO_HORA = '@'  # Formato texto para horas ya formateadas como HH:MM AM/PM
+FORMATO_HORA = 'h:mm:ss AM/PM'  # Formato de hora con segundos y AM/PM
 
 # Configuración de columnas para Excel
 COLUMNAS_CONFIG_ISABEL = {
@@ -457,9 +457,9 @@ def generar_reporte_agregado(df: pd.DataFrame, date_col_name: str) -> pd.DataFra
         'Ultima_Llamada': 'Última Llamada'
     })
     
-    # Formatear la columna de hora como HH:MM AM/PM
+    # Formatear la columna de hora con segundos en formato de hora corta
     if 'Última Llamada' in final_report.columns:
-        final_report['Última Llamada'] = pd.to_datetime(final_report['Última Llamada']).dt.strftime('%I:%M %p')
+        final_report['Última Llamada'] = pd.to_datetime(final_report['Última Llamada']).dt.strftime('%I:%M:%S %p')
     
     return final_report
 
