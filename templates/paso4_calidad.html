@@ -184,6 +184,16 @@
                     Selecciona el archivo de salida del Paso 3. Los datos se integrarán automáticamente en la hoja Operativo.
                 </small>
             </div>
+
+            <div class="file-inputs">
+                <label for="archivoBiometricos">
+                    🕒 Archivo de Biométricos (Opcional):
+                </label>
+                <input type="file" id="archivoBiometricos" name="archivoBiometricos" accept=".xlsx,.xls">
+                <small style="color: #6c757d; font-size: 12px; display: block; margin-top: 5px;">
+                    Archivo Excel con datos de biométricos (Hoja 1). Columnas: FECHA, CODIGO, CEDULA, NOMBRE, HORA, CARGO, AREA, SEDE, FECHA EN CHINO, TIPO DE DIA
+                </small>
+            </div>
             
             <button type="button" class="action-button" id="generateBtn">
                 ⭐ Generar Reporte de Calidad
@@ -255,6 +265,13 @@
                 formData.append('excelFileReporte3', reporte3File);
             } else if (reporte3AutoFile) {
                 formData.append('reporte3_auto_file', reporte3AutoFile);
+            }
+
+            // Agregar archivo de biométricos si está seleccionado
+            const biometricosFile = document.getElementById('archivoBiometricos').files[0];
+            if (biometricosFile) {
+                formData.append('archivoBiometricos', biometricosFile);
+                console.log('Archivo de biométricos agregado:', biometricosFile.name);
             }
             
             // Usar fetch para procesar y luego descargar

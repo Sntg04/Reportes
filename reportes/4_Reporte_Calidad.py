@@ -1,22 +1,166 @@
 """
 Módulo para el procesamiento del 4_Reporte_Calidad
-Sistema para generación de reportes de calidad con métricas y análisis operativo
+Sistema para generación de reportes de calidad con métricas y análisis operativo.
+
+Genera un archivo Excel completo con múltiples hojas:
+- Consolidado: Resumen de métricas principales
+- Gerente: Datos de gestión y supervisión  
+- Team: Información por equipos
+- Operativo: Datos operativos detallados del Reporte 3
+- Calidad: Métricas de calidad y seguimiento
+- Ausentismo: Control de asistencia con datos biométricos
+- Asistencia Lideres: Seguimiento de liderazgo
+- Planta: Información de personal y configuración
+
+Características principales:
+- Conversión automática de formatos de tiempo (24h → AM/PM)
+- Procesamiento de datos biométricos con validación
+- Generación automática de fórmulas Excel para métricas calculadas
+- Validación de datos y manejo de errores integrado
+- Configuración centralizada de constantes y umbrales
+
+Versión: 3.1 (Con mejoras de código y optimización)
+Última actualización: Enero 2025
 """
 
 import pandas as pd
 import io
 import os
 import glob
+import logging
 from datetime import datetime
 from flask import request, jsonify, send_file
 from utils.file_utils import allowed_file
 
-# Constantes de configuración
-FILTRO_ASIGNACION_MIN = 5
-VALOR_INDICADOR_CUMPLE = 0.15
-M0_TOQUES_MIN = 120
-OTRAS_CARTERAS_TOQUES_MIN = 160
-PORCENTAJE_ASIGNACION_M0 = 0.9
+# Importaciones de openpyxl consolidadas
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.worksheet.datavalidation import DataValidation
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+def validar_columnas_excel(df, columnas_requeridas, sheet_name="hoja"):
+    """
+    Valida que existan las columnas requeridas en un DataFrame
+    
+    Args:
+        df: DataFrame a validar
+        columnas_requeridas: Lista de nombres de columnas requeridas
+        sheet_name: Nombre de la hoja para mensajes de error
+    
+    Returns:
+        bool: True si todas las columnas existen, False si alguna falta
+    """
+    columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+    
+    if columnas_faltantes:
+        print(f"ERROR: Columnas faltantes en {sheet_name}: {columnas_faltantes}")
+        return False
+    
+    return True
+
+def encontrar_columna_excel(worksheet, nombre_columna, silent=False):
+    """
+    Encuentra el índice de una columna en una hoja Excel
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        nombre_columna: Nombre de la columna a buscar
+        silent: Si True, no imprime mensajes de error
+    
+    Returns:
+        int o None: Índice de la columna (1-based) o None si no se encuentra
+    """
+    for col in range(1, worksheet.max_column + 1):
+        if worksheet.cell(row=1, column=col).value == nombre_columna:
+            return col
+    
+    if not silent:
+        print(f"ERROR: No se encontró columna '{nombre_columna}'")
+    
+    return None
+
+def procesar_fechas_columna(df, columna_fecha, formato_salida='%d/%m/%Y'):
+    """
+    Procesa y normaliza una columna de fechas con múltiples formatos
+    
+    Args:
+        df: DataFrame que contiene la columna
+        columna_fecha: Nombre de la columna de fechas
+        formato_salida: Formato de salida para las fechas
+    
+    Returns:
+        tuple: (fechas_procesadas, count_validas)
+    """
+    try:
+        # Intentar conversión automática
+        df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
+        
+        # Intentar formatos específicos para valores nulos
+        mask_nulos = df[columna_fecha].isna()
+        if mask_nulos.any():
+            # Formato DD/MM/YYYY
+            try:
+                fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
+                                           format='%d/%m/%Y', errors='coerce')
+                df.loc[mask_nulos, columna_fecha] = fechas_temp
+            except:
+                pass
+                
+            # Formato MM/DD/YYYY  
+            mask_nulos = df[columna_fecha].isna()
+            if mask_nulos.any():
+                try:
+                    fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
+                                               format='%m/%d/%Y', errors='coerce')
+                    df.loc[mask_nulos, columna_fecha] = fechas_temp
+                except:
+                    pass
+        
+        # Convertir a formato de salida
+        df[columna_fecha] = df[columna_fecha].dt.strftime(formato_salida)
+        count_validas = df[columna_fecha].notna().sum()
+        
+        return df[columna_fecha], count_validas
+        
+    except Exception as e:
+        logger.warning(f"Error procesando fechas en columna {columna_fecha}: {e}")
+        return df[columna_fecha], 0
+
+# Constantes de configuración del reporte
+class ConfigReporte:
+    """Constantes de configuración centralizadas para el reporte de calidad"""
+    
+    # Filtros y umbrales
+    FILTRO_ASIGNACION_MIN = 5
+    VALOR_INDICADOR_CUMPLE = 0.15
+    M0_TOQUES_MIN = 120
+    OTRAS_CARTERAS_TOQUES_MIN = 160
+    PORCENTAJE_ASIGNACION_M0 = 0.9
+    ASIGNACION_MIN_GESTION = 45
+    VALOR_INDICADOR_TOQUES = 0.2
+    
+    # Horarios de validación
+    HORA_INGRESO_NORMAL = "08:00:00"
+    HORA_INGRESO_PAGO = "07:30:00"
+    
+    # Nombres de hojas del reporte
+    HOJAS_REPORTE = [
+        "Consolidado", "Gerente", "Team", "Operativo", 
+        "Calidad", "Ausentismo", "Asistencia Lideres", "Planta"
+    ]
+    
+    # Columnas para el DataFrame de ausentismo
+    COLUMNAS_AUSENTISMO = [
+        "Codigo Aus", "Codigo", "Tipo Jornada", "Fecha", "Cedula", "ID",
+        "Nombre", "Sede", "Ubicacion", "Logueo Admin", "Ingreso", 
+        "Salida", "Horas laboradas", "Novedad Ingreso", "Validacion", "Drive"
+    ]
+
+
 
 def aplicar_formato_tabla(worksheet, dataframe, table_name):
     """
@@ -28,8 +172,7 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
         table_name: Nombre de la tabla
     """
     try:
-        from openpyxl.worksheet.table import Table, TableStyleInfo
-        from openpyxl.utils import get_column_letter
+        # Imports consolidados en el top del archivo
         
         # Definir el rango de la tabla
         if len(dataframe) == 0:
@@ -62,14 +205,231 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
     except Exception as e:
         print(f"WARN:  No se pudo aplicar formato de tabla a {table_name}: {str(e)}")
 
-def procesar_reporte_calidad():
+def procesar_archivo_biometricos():
     """
-    Funcion principal para procesar el reporte de calidad
+    Procesa archivo biométrico con estructura específica:
+    FECHA, CODIGO, CEDULA, NOMBRE, HORA, CARGO, AREA, SEDE, FECHA EN CHINO, TIPO DE DIA
+    
+    Proceso:
+    1. Genera código: CEDULA + DIA + MES de la fecha
+    2. Agrupa por código y calcula hora mínima (ingreso) y máxima (salida)
+    
+    Returns:
+        dict: Diccionario con códigos y horas procesadas para integración
     """
     try:
-        print("INFO: Iniciando procesamiento del Reporte de Calidad...")
-        print(f"INFO: Datos del formulario: {list(request.form.keys())}")
-        print(f"INFO: Archivos recibidos: {list(request.files.keys())}")
+        print("=== PROCESANDO ARCHIVO BIOMÉTRICOS ===")
+        
+        # Obtener archivo biométrico del formulario
+        biometricos_file = request.files.get('archivoBiometricos')
+        if not biometricos_file:
+            print("AVISO: No se encontró archivo biométrico (opcional)")
+            return None
+        
+        print(f"✅ Archivo biométrico recibido: {biometricos_file.filename}")
+        
+        # Validar formato
+        if not allowed_file(biometricos_file.filename, {'xlsx', 'xls'}):
+            print("ERROR: Formato de archivo no permitido para biométricos")
+            return None
+        
+        # Leer archivo Excel - Primero detectar si tiene headers
+        print("🔍 Analizando estructura del archivo...")
+        
+        # Intentar leer con headers
+        df_test = pd.read_excel(biometricos_file, nrows=5)
+        print(f"📊 Primeras columnas detectadas: {list(df_test.columns)}")
+        
+        # Si las columnas son 'Unnamed:', probablemente no hay headers
+        if any('Unnamed:' in str(col) for col in df_test.columns):
+            print("⚠️ Archivo sin headers detectado, aplicando headers estándar...")
+            biometricos_file.seek(0)  # Resetear posición
+            df_biometricos = pd.read_excel(biometricos_file, header=None)
+            
+            # Aplicar nombres estándar de columnas según tu especificación
+            if len(df_biometricos.columns) >= 3:
+                nuevas_columnas = ['FECHA', 'CODIGO', 'CEDULA', 'NOMBRE', 'HORA', 'CARGO', 'AREA', 'SEDE', 'FECHA EN CHINO', 'TIPO DE DIA']
+                # Usar solo las columnas que existen
+                num_cols = min(len(df_biometricos.columns), len(nuevas_columnas))
+                df_biometricos.columns = nuevas_columnas[:num_cols]
+                print(f"✅ Headers aplicados: {list(df_biometricos.columns)}")
+            else:
+                print(f"❌ ERROR: Archivo tiene muy pocas columnas: {len(df_biometricos.columns)}")
+                return None
+        else:
+            # Archivo ya tiene headers válidos
+            biometricos_file.seek(0)
+            df_biometricos = pd.read_excel(biometricos_file)
+        
+        print(f"✅ Archivo procesado: {len(df_biometricos)} registros")
+        print(f"✅ Columnas finales: {list(df_biometricos.columns)}")
+        
+        # Validar que tenga las columnas requeridas
+        columnas_requeridas = ['FECHA', 'CEDULA', 'HORA']
+        columnas_faltantes = [col for col in columnas_requeridas if col not in df_biometricos.columns]
+        
+        if columnas_faltantes:
+            print(f"❌ ERROR: Columnas faltantes: {columnas_faltantes}")
+            print(f"📋 Columnas disponibles: {list(df_biometricos.columns)}")
+            print("💡 Asegúrese de que el archivo tenga las columnas: FECHA, CEDULA, HORA")
+            return None
+        
+        # Limpiar datos nulos
+        registros_iniciales = len(df_biometricos)
+        df_biometricos = df_biometricos.dropna(subset=['FECHA', 'CEDULA', 'HORA']).copy()
+        print(f"✅ Datos limpiados: {len(df_biometricos)} registros válidos de {registros_iniciales}")
+        
+        if len(df_biometricos) == 0:
+            print("❌ ERROR: No hay registros válidos")
+            return None
+        
+        # Convertir fecha a datetime
+        df_biometricos['FECHA'] = pd.to_datetime(df_biometricos['FECHA'], errors='coerce')
+        df_biometricos = df_biometricos.dropna(subset=['FECHA']).copy()
+        print(f"✅ Fechas procesadas: {len(df_biometricos)} registros con fechas válidas")
+        
+        # Generar código: CEDULA + DIA + MES
+        print("🔄 Generando códigos biométricos...")
+        df_biometricos['dia'] = df_biometricos['FECHA'].dt.day.astype(str).str.zfill(2)
+        df_biometricos['mes'] = df_biometricos['FECHA'].dt.month.astype(str).str.zfill(2)
+        df_biometricos['cedula_str'] = df_biometricos['CEDULA'].astype(str).str.strip()
+        df_biometricos['codigo_biometrico'] = df_biometricos['cedula_str'] + df_biometricos['dia'] + df_biometricos['mes']
+        
+        print(f"✅ Códigos generados: {len(df_biometricos['codigo_biometrico'].unique())} códigos únicos")
+        
+        # Mostrar muestra de códigos generados
+        print("🔍 Muestra de códigos generados:")
+        for i, row in df_biometricos.head(3).iterrows():
+            fecha_str = row['FECHA'].strftime('%d/%m/%Y')
+            print(f"   Cédula: {row['cedula_str']}, Fecha: {fecha_str} → Código: {row['codigo_biometrico']}")
+        
+        # Agrupar por código y calcular min/max horas
+        print("📊 Agrupando por código y calculando horas min/max...")
+        
+        # Convertir HORA a formato datetime para cálculos precisos
+        try:
+            df_biometricos['HORA_DATETIME'] = pd.to_datetime(df_biometricos['HORA'], format='%H:%M:%S', errors='coerce')
+            if df_biometricos['HORA_DATETIME'].isna().any():
+                # Intentar otros formatos comunes
+                mask_nulos = df_biometricos['HORA_DATETIME'].isna()
+                df_biometricos.loc[mask_nulos, 'HORA_DATETIME'] = pd.to_datetime(
+                    df_biometricos.loc[mask_nulos, 'HORA'], format='%H:%M', errors='coerce'
+                )
+        except:
+            # Si falla, usar la hora original
+            df_biometricos['HORA_DATETIME'] = df_biometricos['HORA']
+        
+        # Agrupar por código biométrico
+        df_agrupado = df_biometricos.groupby('codigo_biometrico').agg({
+            'HORA': ['min', 'max'],  # Para mostrar
+            'HORA_DATETIME': ['min', 'max'],  # Para cálculos
+            'CEDULA': 'first',
+            'NOMBRE': 'first' if 'NOMBRE' in df_biometricos.columns else lambda x: 'N/A',
+            'FECHA': 'first'
+        }).reset_index()
+        
+        # Aplanar columnas
+        df_agrupado.columns = ['codigo_biometrico', 'hora_ingreso_str', 'hora_salida_str', 
+                              'hora_ingreso_dt', 'hora_salida_dt', 'cedula', 'nombre', 'fecha']
+        
+        print(f"✅ Agrupación completada: {len(df_agrupado)} registros únicos")
+        
+        # Convertir horas a formato AM/PM
+        print("🕐 Convirtiendo horas a formato AM/PM...")
+        
+        def convertir_a_ampm(hora_str):
+            """Convierte hora en formato HH:MM:SS a formato HH:MM AM/PM"""
+            try:
+                # Convertir a string y limpiar
+                hora_str = str(hora_str).strip()
+                
+                if not hora_str or hora_str == 'nan' or hora_str == 'None' or hora_str == 'NaT':
+                    return ''
+                
+                # Si viene de datetime, podría tener formato "1900-01-01 HH:MM:SS"
+                if ' ' in hora_str and len(hora_str.split(' ')) == 2:
+                    hora_str = hora_str.split(' ')[1]  # Tomar solo la parte de la hora
+                
+                # Parsear la hora
+                if ':' in hora_str:
+                    partes = hora_str.split(':')
+                    if len(partes) >= 2:
+                        try:
+                            hora = int(partes[0])
+                            minuto = int(partes[1])
+                            # Incluir segundos si están disponibles
+                            segundo = int(partes[2]) if len(partes) >= 3 else 0
+                        except ValueError:
+                            return hora_str  # No se puede convertir a int
+                    else:
+                        return hora_str  # Formato no válido
+                else:
+                    return hora_str  # No tiene formato de hora
+                
+                # Convertir a formato AM/PM con segundos
+                if hora == 0:
+                    return f"12:{minuto:02d}:{segundo:02d} AM"
+                elif hora < 12:
+                    return f"{hora}:{minuto:02d}:{segundo:02d} AM"
+                elif hora == 12:
+                    return f"12:{minuto:02d}:{segundo:02d} PM"
+                else:
+                    return f"{hora-12}:{minuto:02d}:{segundo:02d} PM"
+                    
+            except Exception as e:
+                print(f"⚠️  Error convirtiendo '{hora_str}': {e}")
+                return str(hora_str)  # Retornar original si hay error
+        
+        # Convertir a string antes de aplicar conversión AM/PM (el groupby puede devolver datetime objects)
+        df_agrupado['hora_ingreso_str'] = df_agrupado['hora_ingreso_str'].astype(str)
+        df_agrupado['hora_salida_str'] = df_agrupado['hora_salida_str'].astype(str)
+        
+        # Aplicar conversión a las horas
+        df_agrupado['hora_ingreso_ampm'] = df_agrupado['hora_ingreso_str'].apply(convertir_a_ampm)
+        df_agrupado['hora_salida_ampm'] = df_agrupado['hora_salida_str'].apply(convertir_a_ampm)
+        
+        # Mostrar resultados con formato AM/PM
+        print("🎯 Resultados del procesamiento:")
+        for i, row in df_agrupado.head(3).iterrows():
+            fecha_str = row['fecha'].strftime('%d/%m/%Y') if pd.notna(row['fecha']) else 'N/A'
+            print(f"   Código: {row['codigo_biometrico']} | Cédula: {row['cedula']} | Fecha: {fecha_str}")
+            print(f"     → Ingreso: {row['hora_ingreso_ampm']} | Salida: {row['hora_salida_ampm']}")
+        
+        print(f"✅ Horarios convertidos a formato AM/PM: {len(df_agrupado)} registros")
+        
+        # Preparar resultado con formato AM/PM
+        resultado = {
+            'codigos': df_agrupado['codigo_biometrico'].tolist(),
+            'cedulas': df_agrupado['cedula'].tolist(),
+            'nombres': df_agrupado['nombre'].tolist(),
+            'fechas': df_agrupado['fecha'].tolist(),
+            'ingresos': df_agrupado['hora_ingreso_ampm'].tolist(),  # Usar formato AM/PM
+            'salidas': df_agrupado['hora_salida_ampm'].tolist()     # Usar formato AM/PM
+        }
+        
+        print(f"✅ Procesamiento completado: {len(resultado['codigos'])} registros listos para integración con horarios AM/PM")
+        return resultado
+        
+    except Exception as e:
+        print(f"❌ ERROR procesando archivo biométrico: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def procesar_reporte_calidad():
+    """
+    Función principal para procesar el reporte de calidad.
+    
+    Maneja la recepción de archivos del formulario web y genera
+    el reporte Excel completo con todas las hojas requeridas.
+    
+    Returns:
+        JSON response con el resultado del procesamiento
+    """
+    try:
+        logger.info("Iniciando procesamiento del Reporte de Calidad...")
+        logger.info(f"Datos del formulario: {list(request.form.keys())}")
+        logger.info(f"Archivos recibidos: {list(request.files.keys())}")
         
         # Verificar si hay archivo automatico del paso 3
         reporte3_auto_file = request.form.get('reporte3_auto_file')
@@ -111,8 +471,11 @@ def procesar_reporte_calidad():
             archivo_reporte3_content = archivo_reporte3
             print(f"OK: Archivo manual recibido: {archivo_reporte3.filename}")
         
+        # Procesar archivo biométrico (opcional)
+        datos_biometricos = procesar_archivo_biometricos()
+        
         # Generar el reporte de calidad
-        resultado = generar_reporte_calidad(archivo_reporte3_content)
+        resultado = generar_reporte_calidad(archivo_reporte3_content, datos_biometricos)
         
         return jsonify({
             'success': True,
@@ -123,9 +486,7 @@ def procesar_reporte_calidad():
         })
         
     except Exception as e:
-        print(f"ERROR: Error en procesar_reporte_calidad: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error en procesar_reporte_calidad: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Error interno del servidor: {str(e)}'
@@ -177,9 +538,18 @@ def generar_prueba_reporte4():
             'message': f'Error generando archivo de prueba: {str(e)}'
         }), 500
 
-def generar_reporte_calidad(archivo_reporte3):
+def generar_reporte_calidad(archivo_reporte3, datos_biometricos=None):
     """
-    Genera el archivo Excel del reporte de calidad con datos del Reporte 3 integrados
+    Genera el archivo Excel del reporte de calidad con datos del Reporte 3 integrados.
+    
+    Args:
+        archivo_reporte3: Archivo Excel del Reporte 3 con datos base
+        
+    Returns:
+        dict: Resultado con información del archivo generado y estadísticas
+        
+    Raises:
+        Exception: Si hay errores en la generación del reporte
     """
     try:
         # Leer datos del Reporte 3 si existe
@@ -287,13 +657,13 @@ def generar_reporte_calidad(archivo_reporte3):
                         df_reporte3[columna_asignacion] = pd.to_numeric(df_reporte3[columna_asignacion], errors='coerce')
                         
                         # Mostrar estadísticas antes del filtro
-                        valores_menores_5 = df_reporte3[df_reporte3[columna_asignacion] <= FILTRO_ASIGNACION_MIN]
-                        print(f"INFO: Registros con {columna_asignacion} <= {FILTRO_ASIGNACION_MIN}: {len(valores_menores_5)}")
+                        valores_menores_5 = df_reporte3[df_reporte3[columna_asignacion] <= ConfigReporte.FILTRO_ASIGNACION_MIN]
+                        print(f"INFO: Registros con {columna_asignacion} <= {ConfigReporte.FILTRO_ASIGNACION_MIN}: {len(valores_menores_5)}")
                         if len(valores_menores_5) > 0:
                             print(f"INFO: Valores a eliminar: {valores_menores_5[columna_asignacion].value_counts().sort_index().to_dict()}")
                         
-                        # Filtrar registros con Asignación > FILTRO_ASIGNACION_MIN
-                        df_reporte3 = df_reporte3[df_reporte3[columna_asignacion] > FILTRO_ASIGNACION_MIN]
+                        # Filtrar registros con Asignación > ConfigReporte.FILTRO_ASIGNACION_MIN
+                        df_reporte3 = df_reporte3[df_reporte3[columna_asignacion] > ConfigReporte.FILTRO_ASIGNACION_MIN]
                         registros_eliminados = registros_antes_filtro - len(df_reporte3)
                         print(f"INFO: Filtro aplicado - Registros: {registros_antes_filtro} → {len(df_reporte3)} (eliminados: {registros_eliminados})")
                     else:
@@ -328,8 +698,11 @@ def generar_reporte_calidad(archivo_reporte3):
             # Crear hoja "Calidad"
             crear_hoja_calidad(writer)
             
-            # Crear hoja "Ausentismo"
-            crear_hoja_ausentismo(writer)
+            # Crear hoja "Ausentismo" con datos base del Reporte 3
+            crear_hoja_ausentismo(writer, df_reporte3)
+            
+            # Sincronizar códigos ausentismo con datos biométricos
+            sincronizar_codigos_ausentismo(writer, datos_biometricos)
             
             # Crear hoja "Asistencia Lideres"
             crear_hoja_asistencia_lideres(writer)
@@ -452,7 +825,7 @@ def crear_hoja_planta(writer):
         worksheet.cell(row=idx, column=9, value=row[1])
     
     # Crear tablas de Excel reales
-    from openpyxl.worksheet.table import Table, TableStyleInfo
+    # Imports consolidados en el top del archivo
     
     # Tabla 1: Usuarios
     tabla_usuarios = Table(displayName="TablaUsuarios", ref="A1:C25")
@@ -531,20 +904,69 @@ def crear_hoja_asistencia_lideres(writer):
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_asistencia, "TablaAsistenciaLideres")
 
-def crear_hoja_ausentismo(writer):
+def crear_hoja_ausentismo(writer, df_reporte3=None):
     """
-    Crea la hoja "Ausentismo" con la tabla especificada
+    Crea la hoja "Ausentismo" copiando datos básicos desde el Reporte 3.
+    Las columnas Ingreso y Salida se dejan vacías para ser llenadas después por datos biométricos.
     """
-    # Crear DataFrame con las columnas especificadas y una fila de ejemplo
-    columnas_ausentismo = [
-        "Codigo Aus", "Codigo", "Tipo Jornada", "Fecha", "Cedula", "ID",
-        "Nombre", "Sede", "Ubicacion", "Logueo Admin", "Ingreso", 
-        "Salida", "Horas laboradas", "Novedad Ingreso", "Validacion", "Drive"
-    ]
+    print("=== CREANDO HOJA AUSENTISMO CON DATOS BASE ===")
     
-    # Crear DataFrame con una fila de ejemplo para evitar errores de tabla
-    datos_ejemplo = [["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
-    df_ausentismo = pd.DataFrame(datos_ejemplo, columns=columnas_ausentismo)
+    # Usar las columnas predefinidas para Ausentismo
+    columnas_ausentismo = ConfigReporte.COLUMNAS_AUSENTISMO
+    
+    # Obtener datos básicos desde el DataFrame del Reporte 3
+    registros_ausentismo = []
+    
+    if df_reporte3 is not None and not df_reporte3.empty:
+        print(f"✅ Procesando {len(df_reporte3)} registros del Reporte 3 para Ausentismo")
+        print(f"Columnas disponibles: {list(df_reporte3.columns)}")
+        
+        # Mapeo de columnas del Reporte 3 a Ausentismo
+        for index, row in df_reporte3.iterrows():
+            # Extraer datos básicos (usando nombres más comunes del Reporte 3)
+            codigo = row.get('CODIGO', row.get('Codigo', ''))
+            tipo_jornada = row.get('Tipo Jornada', '')
+            fecha = row.get('Fecha', '')
+            cedula = row.get('Cedula', '')
+            id_emp = row.get('ID', '')
+            nombre = row.get('Nombre', row.get('NOMBRE', ''))
+            sede = row.get('Sede', row.get('SEDE', ''))
+            ubicacion = row.get('Ubicacion', row.get('UBICACION', ''))
+            logueo = row.get('Logueo', row.get('LOGUEO', ''))
+            
+            # Crear registro para Ausentismo - TODAS las columnas vacías
+            # Las fórmulas llenarán automáticamente los datos
+            registro = [
+                "",            # Codigo Aus (se llenará con fórmula: Cedula + DDMM)
+                "",            # Codigo (se llenará con copia directa desde Operativo)
+                "",            # Tipo Jornada (se llenará con INDEX/MATCH)
+                "",            # Fecha (se llenará con INDEX/MATCH)
+                "",            # Cedula (se llenará con INDEX/MATCH)
+                "",            # ID (se llenará con INDEX/MATCH)
+                "",            # Nombre (se llenará con INDEX/MATCH)
+                "",            # Sede (se llenará con INDEX/MATCH)
+                "",            # Ubicacion (se llenará con INDEX/MATCH)
+                "",            # Logueo Admin (se llenará con INDEX/MATCH)
+                "",            # Ingreso (vacío, se llenará con biométricos)
+                "",            # Salida (vacío, se llenará con biométricos)
+                "",            # Horas laboradas
+                "",            # Novedad Ingreso
+                "",            # Validacion
+                ""             # Drive
+            ]
+            registros_ausentismo.append(registro)
+        
+        print(f"✅ {len(registros_ausentismo)} registros preparados para Ausentismo")
+        
+    else:
+        print("⚠️ No se encontró Reporte 3 válido, creando hoja Ausentismo vacía")
+    
+    # Crear DataFrame con los registros (o vacío si no hay datos)
+    if registros_ausentismo:
+        df_ausentismo = pd.DataFrame(registros_ausentismo, columns=columnas_ausentismo)
+    else:
+        # Crear al menos una fila vacía para la estructura
+        df_ausentismo = pd.DataFrame([["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]], columns=columnas_ausentismo)
     
     # Escribir a Excel
     df_ausentismo.to_excel(writer, sheet_name="Ausentismo", index=False)
@@ -583,6 +1005,344 @@ def crear_hoja_ausentismo(writer):
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_ausentismo, "TablaAusentismo")
+    
+    # AGREGAR FÓRMULAS DE VLOOKUP para buscar datos en la tabla Operativo
+    agregar_formulas_vlookup_ausentismo(worksheet, len(df_ausentismo), df_reporte3)
+
+def agregar_formulas_vlookup_ausentismo(worksheet, num_registros, df_reporte3=None):
+    """
+    Agrega fórmulas en la tabla Ausentismo basado en el sistema del backup:
+    - Columna Codigo: Copia directa desde Operativo
+    - Otras columnas: INDEX/MATCH usando el código como referencia
+    - Codigo Aus: Se genera con Cedula + DDMM
+    """
+    print("=== AGREGANDO FÓRMULAS EN TABLA AUSENTISMO (SISTEMA BACKUP) ===")
+    
+    # Mapeo de columnas según el backup
+    mapeo_columnas = {
+        # Ausentismo_col_index: (Operativo_col_letter, descripcion)
+        2: ('A', 'Codigo'),           # Codigo <- CODIGO (copia directa)
+        3: ('B', 'Tipo Jornada'),     # Tipo Jornada <- Tipo Jornada  
+        4: ('C', 'Fecha'),            # Fecha <- Fecha
+        5: ('D', 'Cedula'),           # Cedula <- Cedula
+        6: ('E', 'ID'),               # ID <- ID
+        7: ('H', 'Nombre'),           # Nombre <- Nombre
+        8: ('I', 'Sede'),             # Sede <- Sede
+        9: ('J', 'Ubicacion'),        # Ubicacion <- Ubicacion
+        10: ('K', 'Logueo Admin'),    # Logueo Admin <- Logueo
+    }
+    
+    # Agregar fórmulas para todas las columnas mapeadas
+    for row in range(2, num_registros + 2):  # +2 porque empezamos en fila 2
+        for ausentismo_col, (operativo_col_letter, desc) in mapeo_columnas.items():
+            if ausentismo_col == 2:  # Columna Codigo - copia directa desde Operativo
+                formula = f'=IF(Operativo!{operativo_col_letter}{row}<>"",Operativo!{operativo_col_letter}{row},"")'
+            else:  # Otras columnas - busca usando el código como referencia
+                # Usa INDEX/MATCH para buscar usando el código de la columna B
+                formula = f'=IF(B{row}<>"",IFERROR(INDEX(Operativo!{operativo_col_letter}:{operativo_col_letter},MATCH(B{row},Operativo!A:A,0)),""),"")'
+            
+            cell = worksheet.cell(row=row, column=ausentismo_col)
+            cell.value = formula
+            
+            if row <= 3:  # Solo mostrar las primeras 3 para debug
+                print(f"  ✅ Fila {row}, Col {ausentismo_col}: {desc} -> {formula}")
+    
+    # Calcular y agregar CODIGO AUS (columna A) directamente como valores - Cedula + DDMM
+    print("Calculando y agregando códigos Aus (Cedula + DDMM) como valores...")
+    
+    # Usar los datos del df_reporte3 para generar códigos directamente
+    # Esto garantiza que los códigos estén disponibles para sincronización inmediata
+    codigos_generados = 0
+    
+    if df_reporte3 is not None and not df_reporte3.empty:
+        # Iterar sobre los datos del DataFrame df_reporte3 
+        for idx in range(min(num_registros, len(df_reporte3))):
+            row_excel = idx + 2  # Excel empieza en fila 2 (fila 1 son headers)
+            
+            # Obtener datos del DataFrame
+            cedula = df_reporte3.iloc[idx]['Cedula']
+            fecha = df_reporte3.iloc[idx]['Fecha']
+            
+            if cedula and fecha:
+                try:
+                    # Parsear fecha (viene en formato DD/MM/YYYY del procesamiento previo)
+                    fecha_obj = None
+                    
+                    if isinstance(fecha, str):
+                        if '/' in fecha:
+                            fecha_obj = datetime.strptime(fecha, '%d/%m/%Y')
+                        else:
+                            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+                    elif hasattr(fecha, 'day'):
+                        fecha_obj = fecha
+                    
+                    # Solo proceder si tenemos una fecha válida
+                    if fecha_obj:
+                        # Generar código: CEDULA + DDMM
+                        dia = f"{fecha_obj.day:02d}"
+                        mes = f"{fecha_obj.month:02d}"
+                        codigo_aus = f"{cedula}{dia}{mes}"
+                        
+                        # Escribir el código directamente como valor en la celda A
+                        worksheet.cell(row=row_excel, column=1, value=codigo_aus)
+                        codigos_generados += 1
+                        
+                        # Debug: Mostrar primeros 3 códigos generados
+                        if codigos_generados <= 3:
+                            print(f"  ✅ Fila {row_excel}: Código '{codigo_aus}' (Cédula: {cedula}, Fecha: {fecha})")
+                        
+                except Exception as e:
+                    if codigos_generados <= 3:  # Solo mostrar errores de las primeras filas para debug
+                        print(f"  ❌ Error generando código para fila {row_excel}: {str(e)}")
+                    pass  # Continuar con el siguiente registro
+        
+        print(f"✅ {codigos_generados} códigos Aus generados exitosamente como valores")
+    else:
+        print("⚠️ No se encontraron datos del DataFrame para generar códigos, usando fórmulas como fallback...")
+        # Fallback a fórmulas si no hay DataFrame disponible
+        for row in range(2, num_registros + 2):
+            formula_codigo_aus = f'=IF(AND(E{row}<>"",D{row}<>""),E{row}&TEXT(DAY(DATEVALUE(D{row})),"00")&TEXT(MONTH(DATEVALUE(D{row})),"00"),"")'
+            worksheet.cell(row=row, column=1, value=formula_codigo_aus)
+            
+            if row <= 3:
+                print(f"  🔗 Fila {row}: Codigo Aus -> {formula_codigo_aus}")
+    
+    print(f"✅ Sistema de fórmulas implementado según backup:")
+    print(f"   - Columna Codigo: Copia directa desde Operativo")
+    print(f"   - Otras columnas: INDEX/MATCH usando código como referencia")
+    print(f"   - Codigo Aus: Cedula + DDMM automático")
+    print(f"   - Columnas Ingreso y Salida quedan libres para biométricos")
+
+def sincronizar_codigos_ausentismo(writer, datos_biometricos=None):
+    """
+    Sincroniza los códigos biométricos con la tabla Ausentismo.
+    Compara códigos generados (CEDULA + DIA + MES) con la columna 'Codigo Aus'
+    y actualiza las columnas Ingreso y Salida con las horas min/max correspondientes.
+    """
+    print("=== SINCRONIZACIÓN BIOMÉTRICOS CON AUSENTISMO ===")
+    
+    # Obtener la hoja de ausentismo
+    hoja_ausentismo = writer.sheets["Ausentismo"]
+    
+    if datos_biometricos is None:
+        print("⚠️ No hay datos biométricos para sincronizar")
+        print("Las columnas Ingreso y Salida permanecerán vacías")
+        return
+    
+    print(f"✅ Datos biométricos disponibles: {len(datos_biometricos['codigos'])} códigos")
+    
+    # Crear diccionario de códigos biométricos para búsqueda rápida
+    # código_biométrico -> (ingreso, salida)
+    biometrico_dict = {}
+    for i in range(len(datos_biometricos['codigos'])):
+        codigo = str(datos_biometricos['codigos'][i]).strip()
+        ingreso = datos_biometricos['ingresos'][i]
+        salida = datos_biometricos['salidas'][i]
+        biometrico_dict[codigo] = (ingreso, salida)
+    
+    print(f"📊 Diccionario de búsqueda creado con {len(biometrico_dict)} entradas")
+    
+    # Mostrar muestra del diccionario con formato AM/PM
+    print("🔍 Muestra de códigos biométricos (formato AM/PM):")
+    for i, (codigo, horas) in enumerate(list(biometrico_dict.items())[:3]):
+        print(f"   {codigo} → Ingreso: {horas[0]}, Salida: {horas[1]}")
+    
+    # Columnas de Ingreso y Salida en la tabla Ausentismo
+    col_ingreso = 11  # Columna K
+    col_salida = 12   # Columna L
+    col_codigo_aus = 1  # Columna A (Codigo Aus)
+    
+    coincidencias = 0
+    filas_procesadas = 0
+    
+    # Forzar cálculo de fórmulas antes de sincronización
+    print("⚡ Forzando cálculo de fórmulas en Excel...")
+    try:
+        # Guardar temporalmente para que Excel calcule las fórmulas
+        writer.book.calculation.calcMode = 'automatic'
+        writer.book.calculation.calcOnSave = True
+    except:
+        print("⚠️ No se pudo configurar el cálculo automático")
+    
+    # Recorrer filas de la tabla Ausentismo (empezar desde fila 2, saltando headers)
+    print("🔄 Procesando filas de la tabla Ausentismo...")
+    
+    # Crear lista de códigos debug para investigar el problema
+    codigos_encontrados = []
+    
+    for row in range(2, hoja_ausentismo.max_row + 1):
+        filas_procesadas += 1
+        
+        # Obtener el valor de Codigo Aus
+        codigo_aus_celda = hoja_ausentismo.cell(row=row, column=col_codigo_aus)
+        
+        # Si es una fórmula, intentar evaluarla manualmente
+        if isinstance(codigo_aus_celda.value, str) and codigo_aus_celda.value.startswith('='):
+            # Es una fórmula, necesitamos obtener los valores manualmente
+            # Obtener cédula y fecha para generar el código
+            cedula_celda = hoja_ausentismo.cell(row=row, column=5)  # Columna E (Cedula)
+            fecha_celda = hoja_ausentismo.cell(row=row, column=4)   # Columna D (Fecha)
+            
+            # Generar código manualmente siguiendo la misma lógica de la fórmula
+            cedula = cedula_celda.value
+            fecha = fecha_celda.value
+            
+            if cedula and fecha:
+                # Intentar parsear la fecha si es string
+                if isinstance(fecha, str):
+                    try:
+                        from datetime import datetime
+                        if '/' in fecha:
+                            fecha_obj = datetime.strptime(fecha, '%d/%m/%Y')
+                        else:
+                            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+                        dia = f"{fecha_obj.day:02d}"
+                        mes = f"{fecha_obj.month:02d}"
+                        codigo_aus = f"{cedula}{dia}{mes}"
+                    except:
+                        codigo_aus = None
+                elif hasattr(fecha, 'day') and hasattr(fecha, 'month'):
+                    dia = f"{fecha.day:02d}"
+                    mes = f"{fecha.month:02d}"
+                    codigo_aus = f"{cedula}{dia}{mes}"
+                else:
+                    codigo_aus = None
+            else:
+                codigo_aus = None
+        else:
+            codigo_aus = codigo_aus_celda.value
+        
+        # Validar y procesar código
+        if codigo_aus is None or str(codigo_aus).strip() == "":
+            continue
+            
+        codigo_aus_str = str(codigo_aus).strip()
+        
+        # Debug: Guardar códigos para análisis
+        if len(codigos_encontrados) < 10:
+            codigos_encontrados.append(codigo_aus_str)
+        
+        # Buscar coincidencia con códigos biométricos
+        if codigo_aus_str in biometrico_dict:
+            ingreso, salida = biometrico_dict[codigo_aus_str]
+            
+            # Actualizar columnas Ingreso y Salida
+            hoja_ausentismo.cell(row=row, column=col_ingreso).value = ingreso
+            hoja_ausentismo.cell(row=row, column=col_salida).value = salida
+            
+            coincidencias += 1
+            
+            # Mostrar primeras 3 coincidencias para debug
+            if coincidencias <= 3:
+                print(f"   ✅ Fila {row}: Código '{codigo_aus_str}' → Ingreso: {ingreso} | Salida: {salida}")
+        else:
+            # No hay coincidencia biométrica, llenar con 00:00:00
+            hoja_ausentismo.cell(row=row, column=col_ingreso).value = "00:00:00"
+            hoja_ausentismo.cell(row=row, column=col_salida).value = "00:00:00"
+    
+    # Resumen de la sincronización
+    print(f"\n📈 RESUMEN DE SINCRONIZACIÓN:")
+    print(f"   - Filas procesadas en Ausentismo: {filas_procesadas}")
+    print(f"   - Coincidencias encontradas: {coincidencias}")
+    print(f"   - Códigos biométricos disponibles: {len(biometrico_dict)}")
+    if len(biometrico_dict) > 0:
+        print(f"   - Porcentaje de coincidencia: {(coincidencias/len(biometrico_dict)*100):.1f}%")
+    else:
+        print(f"   - Porcentaje de coincidencia: 0.0% (sin datos biométricos)")
+    
+    # Debug adicional para investigar falta de coincidencias
+    if coincidencias == 0 and len(codigos_encontrados) > 0:
+        print("\n🔍 DEBUG - COMPARACIÓN DE CÓDIGOS:")
+        print("   Códigos de Ausentismo encontrados (primeros 5):")
+        for i, codigo in enumerate(codigos_encontrados[:5]):
+            print(f"     {i+1}. '{codigo}'")
+        
+        print("   Códigos biométricos disponibles (primeros 5):")
+        for i, codigo in enumerate(list(biometrico_dict.keys())[:5]):
+            print(f"     {i+1}. '{codigo}'")
+        
+        # Verificar longitudes y formatos
+        if len(codigos_encontrados) > 0 and len(biometrico_dict) > 0:
+            codigo_aus_sample = codigos_encontrados[0]
+            codigo_bio_sample = list(biometrico_dict.keys())[0]
+            print(f"   Longitud código Ausentismo: {len(codigo_aus_sample)} chars")
+            print(f"   Longitud código Biométrico: {len(codigo_bio_sample)} chars")
+    
+    if coincidencias == 0:
+        print("⚠️ ADVERTENCIA: No se encontraron coincidencias entre códigos")
+        print("   Verificar que los códigos 'Codigo Aus' tengan el formato CEDULA+DDMM")
+    else:
+        print(f"✅ ÉXITO: {coincidencias} registros actualizados con horarios biométricos")
+    
+    # Agregar fórmulas de "Horas laboradas" en la columna M (índice 13)
+    print("📝 Agregando fórmulas de Horas Laboradas...")
+    col_horas_laboradas = 13  # Columna M
+    
+    for row in range(2, filas_procesadas + 2):  # Desde fila 2 hasta la última fila procesada
+        # Fórmula para calcular diferencia de tiempo en formato HH:MM
+        # =IFERROR(TEXT(TIMEVALUE(L{row})-TIMEVALUE(K{row}),"[h]:mm"),"0:00")
+        formula = f'=IFERROR(TEXT(TIMEVALUE(L{row})-TIMEVALUE(K{row}),"[h]:mm"),"0:00")'
+        hoja_ausentismo.cell(row=row, column=col_horas_laboradas).value = formula
+    
+    print(f"✅ Fórmulas de Horas Laboradas agregadas: {filas_procesadas} fórmulas (formato HH:MM)")
+    
+    # Agregar fórmulas de "Novedad Ingreso" en la columna N (índice 14)
+    print("📝 Agregando fórmulas de Novedad Ingreso...")
+    col_novedad_ingreso = 14  # Columna N
+    
+    for row in range(2, filas_procesadas + 2):  # Desde fila 2 hasta la última fila procesada
+        # Fórmula para validar horarios según tipo de jornada:
+        # Si Tipo Jornada = "Normal" y Ingreso > 8:00 AM → "Llego Tarde"
+        # Si Tipo Jornada = "Pago" y Ingreso > 7:30 AM → "Llego Tarde"  
+        # Si cumple horario → "Sin Novedad"
+        # Si hay error → ""
+        formula = f'''=IFERROR(IF(AND(C{row}="Normal",TIMEVALUE(K{row})>TIME(8,0,0)),"Llego Tarde",IF(AND(C{row}="Pago",TIMEVALUE(K{row})>TIME(7,30,0)),"Llego Tarde","Sin Novedad")),"")'''
+        hoja_ausentismo.cell(row=row, column=col_novedad_ingreso).value = formula
+    
+    # Agregar validación de datos (checklist) para la columna Novedad Ingreso
+    from openpyxl.worksheet.datavalidation import DataValidation
+    
+    # Crear validación de datos con lista desplegable
+    dv = DataValidation(
+        type="list",
+        formula1='"Sin Novedad,Llego Tarde"',
+        allow_blank=True
+    )
+    dv.error = "Por favor seleccione una opción válida"
+    dv.errorTitle = "Entrada no válida"
+    dv.prompt = "Seleccione: Sin Novedad o Llego Tarde"
+    dv.promptTitle = "Novedad de Ingreso"
+    
+    # Aplicar validación a todo el rango de la columna N (desde fila 2 hasta la última)
+    rango_validacion = f"N2:N{filas_procesadas + 1}"
+    dv.add(rango_validacion)
+    hoja_ausentismo.add_data_validation(dv)
+    
+    print(f"✅ Fórmulas de Novedad Ingreso agregadas: {filas_procesadas} fórmulas")
+    print(f"✅ Validación de datos (checklist) aplicada al rango: {rango_validacion}")
+    
+    # Agregar fórmulas de "Validacion" en la columna O (índice 15)
+    print("📝 Agregando fórmulas de Validación...")
+    col_validacion = 15  # Columna O
+    
+    for row in range(2, filas_procesadas + 2):  # Desde fila 2 hasta la última fila procesada
+        # Fórmula para comparar Logueo Admin < Ingreso
+        # =[@[Logueo Admin]]<[@Ingreso] adaptada a referencias de celda
+        formula = f"=J{row}<K{row}"
+        hoja_ausentismo.cell(row=row, column=col_validacion).value = formula
+    
+    print(f"✅ Fórmulas de Validación agregadas: {filas_procesadas} fórmulas")
+    
+    # Agregar fórmulas de "Drive" en la columna P (índice 16)
+    print("📝 Agregando fórmulas de Drive...")
+    col_drive = 16  # Columna P
+    
+    for row in range(2, filas_procesadas + 2):  # Desde fila 2 hasta la última fila procesada
+        # Fórmula para referenciar la columna Novedad Ingreso
+        formula = f"=N{row}"
+        hoja_ausentismo.cell(row=row, column=col_drive).value = formula
+    
+    print(f"✅ Fórmulas de Drive agregadas: {filas_procesadas} fórmulas")
 
 def leer_archivo_monitoreos():
     """
@@ -1249,11 +2009,11 @@ def crear_hoja_operativo(writer, df_reporte3=None):
             break
     
     if ind_pausa_col:
-        # Agregar valor fijo 0.15 en la columna Ind Pausa para cada fila de datos
+        # Agregar valor fijo ConfigReporte.VALOR_INDICADOR_CUMPLE en la columna Ind Pausa para cada fila de datos
         for row in range(2, len(df_operativo) + 2):  # Empezar en fila 2 (despues del header)
             cell = worksheet.cell(row=row, column=ind_pausa_col)
-            cell.value = 0.15
-        print(f"Valores fijos 0.15 agregados en columna Ind Pausa: {len(df_operativo)} filas")
+            cell.value = ConfigReporte.VALOR_INDICADOR_CUMPLE
+        print(f"Valores fijos {ConfigReporte.VALOR_INDICADOR_CUMPLE} agregados en columna Ind Pausa: {len(df_operativo)} filas")
     else:
         print("ERROR: No se encontro columna Ind Pausa")
     

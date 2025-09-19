@@ -148,39 +148,25 @@ def endpoint_reporte_calidad():
 
 @app.route('/procesar-y-descargar-reporte4', methods=['POST'])
 def endpoint_procesar_y_descargar_reporte4():
-    """Endpoint que procesa y descarga directamente el Reporte 4"""
+    """Endpoint que procesa y descarga directamente el Reporte 4 CON procesamiento de biométricos"""
     try:
-        from reportes import _4_Reporte_Calidad
-        from flask import request
+        # Usar la función corregida que incluye procesamiento de biométricos
+        response = procesar_reporte_calidad()
         
-        # Verificar si hay archivo automático del paso 3
-        reporte3_auto_file = request.form.get('reporte3_auto_file')
-        archivo_reporte3_content = None
-        
-        if reporte3_auto_file:
-            # Usar archivo temporal del paso 3
-            temp_filepath = os.path.join('temp_files', reporte3_auto_file)
-            if os.path.exists(temp_filepath):
-                archivo_reporte3_content = temp_filepath
+        # Si la respuesta es exitosa, extraer el filename y descargar
+        if hasattr(response, 'json') and response.json.get('success'):
+            filename = response.json.get('filename')
+            temp_filepath = os.path.join('temp_files', filename)
+            
+            return send_file(
+                temp_filepath,
+                as_attachment=True,
+                download_name=filename,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
         else:
-            # Usar archivo manual
-            if 'excelFileReporte3' in request.files:
-                archivo_reporte3 = request.files['excelFileReporte3']
-                if archivo_reporte3.filename != '':
-                    archivo_reporte3_content = archivo_reporte3
-        
-        # Generar el reporte de calidad
-        resultado = _4_Reporte_Calidad.generar_reporte_calidad(archivo_reporte3_content)
-        
-        # Descargar directamente
-        temp_filepath = os.path.join('temp_files', resultado['filename'])
-        
-        return send_file(
-            temp_filepath,
-            as_attachment=True,
-            download_name=resultado['filename'],
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+            # Si hay error, devolver la respuesta JSON original
+            return response
         
     except Exception as e:
         from flask import jsonify
