@@ -42,6 +42,51 @@ from openpyxl.worksheet.datavalidation import DataValidation
 # Configurar logging
 logger = logging.getLogger(__name__)
 
+# ==========================================
+# CONSTANTES Y CONFIGURACIONES
+# ==========================================
+
+# Configuraciones de Excel
+DEFAULT_EXCEL_RANGE = 1000
+PERCENTAGE_FORMAT = '0.00%'
+INTEGER_FORMAT = '0'
+DATE_FORMAT = '%d/%m/%Y'
+TABLE_STYLE_DEFAULT = 'TableStyleMedium2'
+TABLE_STYLE_BLUE = 'TableStyleMedium9'
+TABLE_STYLE_GREEN = 'TableStyleMedium15'
+TABLE_STYLE_YELLOW = 'TableStyleMedium21'
+
+# Meses en español para nombres de archivo
+MESES_ESPANOL = {
+    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+    7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+}
+
+# Nombres de hojas
+SHEET_NAMES = {
+    'CONSOLIDADO': 'Consolidado',
+    'GERENTE': 'Gerente', 
+    'TEAM': 'Team',
+    'OPERATIVO': 'Operativo',
+    'CALIDAD': 'Calidad',
+    'AUSENTISMO': 'Ausentismo',
+    'ASISTENCIA_LIDERES': 'Asistencia Lideres',
+    'PLANTA': 'Planta'
+}
+
+# Columnas estándar para validación
+COLUMNAS_REQUERIDAS_OPERATIVO = [
+    'CODIGO', 'Cedula', 'Fecha', 'Team', 'Gerencia'
+]
+
+COLUMNAS_REQUERIDAS_CALIDAD = [
+    'CODIGO', 'Nota Total', 'Total Monitoreos'
+]
+
+# ==========================================
+# FUNCIONES DE UTILIDAD
+# ==========================================
+
 def validar_columnas_excel(df, columnas_requeridas, sheet_name="hoja"):
     """
     Valida que existan las columnas requeridas en un DataFrame
@@ -107,7 +152,8 @@ def procesar_fechas_columna(df, columna_fecha, formato_salida='%d/%m/%Y'):
                 fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
                                            format='%d/%m/%Y', errors='coerce')
                 df.loc[mask_nulos, columna_fecha] = fechas_temp
-            except:
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Error en conversión de fecha DD/MM/YYYY: {e}")
                 pass
                 
             # Formato MM/DD/YYYY  
@@ -117,7 +163,8 @@ def procesar_fechas_columna(df, columna_fecha, formato_salida='%d/%m/%Y'):
                     fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
                                                format='%m/%d/%Y', errors='coerce')
                     df.loc[mask_nulos, columna_fecha] = fechas_temp
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Error en conversión de fecha MM/DD/YYYY: {e}")
                     pass
         
         # Convertir a formato de salida
@@ -162,6 +209,132 @@ class ConfigReporte:
 
 
 
+def aplicar_formato_porcentaje(worksheet, columnas_porcentaje, num_filas):
+    """
+    Aplica formato de porcentaje a columnas específicas
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        columnas_porcentaje: Lista de letras de columnas (ej: ['M', 'N', 'P'])
+        num_filas: Número de filas con datos (sin contar encabezados)
+    """
+    if num_filas > 0:
+        for columna in columnas_porcentaje:
+            for fila in range(2, num_filas + 2):  # +2 porque empezamos en fila 2
+                worksheet[f'{columna}{fila}'].number_format = PERCENTAGE_FORMAT
+        
+        print(f"✅ Formato de porcentaje aplicado a {num_filas} filas en columnas {', '.join(columnas_porcentaje)}")
+
+def crear_formula_vlookup(columna_busqueda, hoja_destino, rango_columnas, indice_columna, valor_error=""):
+    """
+    Crea una fórmula VLOOKUP estándar con validación
+    
+    Args:
+        columna_busqueda: Columna donde está el valor a buscar (ej: 'B{i}')
+        hoja_destino: Nombre de la hoja destino
+        rango_columnas: Rango de columnas (ej: 'A:G')
+        indice_columna: Índice de la columna a devolver
+        valor_error: Valor a devolver en caso de error
+    
+    Returns:
+        str: Fórmula VLOOKUP completa
+    """
+    return f'=IF({columna_busqueda}="",{valor_error},IFERROR(VLOOKUP({columna_busqueda},{hoja_destino}!{rango_columnas},{indice_columna},FALSE),{valor_error}))'
+
+def crear_formula_busqueda_multiple(fecha_col, nombre_col, equipo_col, operacion_col=None, operacion="COUNT"):
+    """
+    Crea la fórmula de búsqueda múltiple de palabras para coincidencias de nombres
+    
+    Args:
+        fecha_col: Columna de fecha (ej: 'B{fila}')
+        nombre_col: Columna de nombre (ej: 'C{fila}')
+        equipo_col: Columna de equipo en Operativo (ej: 'Z' para Team, 'Y' para Gerencia)
+        operacion_col: Columna de operación específica (ej: 'AI' para infracciones)
+        operacion: Tipo de operación ('COUNT', 'SUM', etc.)
+    
+    Returns:
+        str: Parte de la fórmula para búsqueda múltiple
+    """
+    condicion_busqueda = f"""((ISNUMBER(SEARCH(LEFT({nombre_col},FIND(" ",{nombre_col}&" ")-1),Operativo!{equipo_col}$2:{equipo_col}$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE({nombre_col}," ",REPT(" ",50)),51,50)),Operativo!{equipo_col}$2:{equipo_col}$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE({nombre_col}," ",REPT(" ",50)),101,50)),Operativo!{equipo_col}$2:{equipo_col}$1000))))>=2"""
+    
+    condicion_fecha = f"Operativo!C$2:C$1000={fecha_col}"
+    
+    if operacion == "COUNT":
+        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda}))"
+    elif operacion == "SUM" and operacion_col:
+        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda})*Operativo!{operacion_col}$2:{operacion_col}$1000)"
+    elif operacion == "COUNT_MONITORED":
+        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda})*(ISNUMBER(MATCH(Operativo!A$2:A$1000,Calidad!A:A,0))))"
+    
+    return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda}))"
+
+def generar_nombre_archivo_calidad(df_reporte3=None):
+    """
+    Genera nombre dinámico para el archivo Excel del Reporte Calidad basado en las fechas de los datos
+    
+    Args:
+        df_reporte3: DataFrame del Reporte 3 con columna 'Fecha' 
+        
+    Returns:
+        str: Nombre del archivo con formato legible
+        
+    Examples:
+        - Un día: "Reporte Calidad (9 Agosto 2025).xlsx"
+        - Mismo mes: "Reporte Calidad (3-8 Septiembre 2025).xlsx" 
+        - Diferente mes: "Reporte Calidad (30 Agosto - 5 Septiembre 2025).xlsx"
+    """
+    if df_reporte3 is None or df_reporte3.empty or 'Fecha' not in df_reporte3.columns:
+        # Usar fecha actual si no hay datos
+        fecha_actual = datetime.now()
+        mes_actual = MESES_ESPANOL[fecha_actual.month]
+        return f"Reporte Calidad ({fecha_actual.day} {mes_actual} {fecha_actual.year}).xlsx"
+    
+    try:
+        # Convertir fechas y obtener únicas ordenadas
+        fechas_unicas = pd.to_datetime(df_reporte3['Fecha'], errors='coerce').dropna().unique()
+        fechas_unicas = sorted(fechas_unicas)
+        
+        if len(fechas_unicas) == 0:
+            # Si no hay fechas válidas, usar fecha actual
+            fecha_actual = datetime.now()
+            mes_actual = MESES_ESPANOL[fecha_actual.month]
+            return f"Reporte Calidad ({fecha_actual.day} {mes_actual} {fecha_actual.year}).xlsx"
+        
+        fecha_inicio = fechas_unicas[0]
+        fecha_fin = fechas_unicas[-1]
+        
+        # Un solo día
+        if fecha_inicio.date() == fecha_fin.date():
+            dia = fecha_inicio.day
+            mes = MESES_ESPANOL[fecha_inicio.month]
+            año = fecha_inicio.year
+            return f"Reporte Calidad ({dia} {mes} {año}).xlsx"
+        
+        # Mismo mes y año
+        if fecha_inicio.month == fecha_fin.month and fecha_inicio.year == fecha_fin.year:
+            mes = MESES_ESPANOL[fecha_inicio.month]
+            año = fecha_inicio.year
+            return f"Reporte Calidad ({fecha_inicio.day}-{fecha_fin.day} {mes} {año}).xlsx"
+        
+        # Mismo año, diferentes meses
+        if fecha_inicio.year == fecha_fin.year:
+            mes_inicio = MESES_ESPANOL[fecha_inicio.month]
+            mes_fin = MESES_ESPANOL[fecha_fin.month]
+            año = fecha_inicio.year
+            return f"Reporte Calidad ({fecha_inicio.day} {mes_inicio} - {fecha_fin.day} {mes_fin} {año}).xlsx"
+        
+        # Diferentes años
+        mes_inicio = MESES_ESPANOL[fecha_inicio.month]
+        mes_fin = MESES_ESPANOL[fecha_fin.month]
+        return f"Reporte Calidad ({fecha_inicio.day} {mes_inicio} {fecha_inicio.year} - {fecha_fin.day} {mes_fin} {fecha_fin.year}).xlsx"
+        
+    except Exception as e:
+        logger.error(f"Error al generar nombre de archivo con fechas: {e}")
+        # Fallback a fecha actual
+        fecha_actual = datetime.now()
+        mes_actual = MESES_ESPANOL[fecha_actual.month]
+        return f"Reporte Calidad ({fecha_actual.day} {mes_actual} {fecha_actual.year}).xlsx"
+
 def aplicar_formato_tabla(worksheet, dataframe, table_name):
     """
     Aplica formato de tabla Excel a una hoja de cálculo
@@ -189,7 +362,7 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
         
         # Aplicar estilo de tabla
         style = TableStyleInfo(
-            name="TableStyleMedium9",  # Estilo azul claro
+            name=TABLE_STYLE_DEFAULT,
             showFirstColumn=False,
             showLastColumn=False,
             showRowStripes=True,
@@ -524,11 +697,17 @@ def descargar_reporte4():
         if not os.path.exists(temp_filepath):
             return jsonify({'success': False, 'message': 'Archivo temporal no encontrado'}), 404
         
+        # Generar nombre de descarga amigable (sin el timestamp técnico)
+        nombre_descarga = temp_filename
+        if temp_filename.startswith('4_Reporte_Calidad_'):
+            # Mantener el nombre amigable del archivo
+            nombre_descarga = temp_filename
+        
         return send_file(
             temp_filepath,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=temp_filename
+            download_name=nombre_descarga
         )
     
     except Exception as e:
@@ -701,11 +880,11 @@ def generar_reporte_calidad(archivo_reporte3, datos_biometricos=None):
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             # Crear hojas en orden inverso para que Planta quede primera
-            # Crear hoja "Consolidado"
-            crear_hoja_consolidado(writer)
+            # Crear hoja "Consolidado" con referencias a códigos de Operativo
+            crear_hoja_consolidado(writer, df_reporte3)
             
-            # Crear hoja "Gerente"
-            crear_hoja_gerente(writer)
+            # Crear hoja "Gerente" con datos de gerentes
+            crear_hoja_gerente(writer, datos_biometricos)
             
             # Crear hoja "Team" con datos de supervisores
             crear_hoja_team(writer, datos_biometricos)
@@ -730,9 +909,8 @@ def generar_reporte_calidad(archivo_reporte3, datos_biometricos=None):
         
         output.seek(0)
         
-        # Generar nombre de archivo
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"4_Reporte_Calidad_{timestamp}.xlsx"
+        # Generar nombre de archivo amigable basado en fechas de los datos
+        filename = generar_nombre_archivo_calidad(df_reporte3)
         
         # Guardar archivo temporalmente
         os.makedirs('temp_files', exist_ok=True)
@@ -844,21 +1022,21 @@ def crear_hoja_planta(writer):
     # Tabla 1: Usuarios (rango dinámico basado en datos reales)
     num_usuarios = len(datos_usuarios) + 1  # +1 para incluir la fila del header
     tabla_usuarios = Table(displayName="TablaUsuarios", ref=f"A1:C{num_usuarios}")
-    style_usuarios = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
+    style_usuarios = TableStyleInfo(name=TABLE_STYLE_BLUE, showFirstColumn=False,
                                   showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_usuarios.tableStyleInfo = style_usuarios
     worksheet.add_table(tabla_usuarios)
     
     # Tabla 2: Dia Pago  
     tabla_dia_pago = Table(displayName="TablaDiaPago", ref="E1:F12")
-    style_dia_pago = TableStyleInfo(name="TableStyleMedium15", showFirstColumn=False,
+    style_dia_pago = TableStyleInfo(name=TABLE_STYLE_GREEN, showFirstColumn=False,
                                    showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_dia_pago.tableStyleInfo = style_dia_pago
     worksheet.add_table(tabla_dia_pago)
     
     # Tabla 3: Dia Normal
     tabla_dia_normal = Table(displayName="TablaDiaNormal", ref="H1:I12")
-    style_dia_normal = TableStyleInfo(name="TableStyleMedium21", showFirstColumn=False,
+    style_dia_normal = TableStyleInfo(name=TABLE_STYLE_YELLOW, showFirstColumn=False,
                                      showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_dia_normal.tableStyleInfo = style_dia_normal
     worksheet.add_table(tabla_dia_normal)
@@ -1770,55 +1948,76 @@ def verificar_integridad_datos(df_operativo, mapeo_columnas):
             except:
                 print(f"  WARN:  {col}: Error al procesar valores numericos")
 
-def crear_hoja_operativo(writer, df_reporte3=None):
+def obtener_mapeo_columnas_operativo():
     """
-    Crea la hoja "Operativo" con la tabla especificada e integra datos del Reporte 3
+    Retorna el mapeo de columnas entre Reporte 3 y Operativo
     """
-    # Definir las columnas de la hoja Operativo
-    columnas_operativo = [
+    return {
+        # Mapeos directos (nombres exactos)
+        'Fecha': 'Fecha',
+        'Cedula': 'Cedula', 
+        'ID': 'ID',
+        'EXT': 'EXT',
+        'VOIP': 'VOIP',
+        'Nombre': 'Nombre',
+        'Sede': 'Sede',
+        'Ubicacion': 'Ubicacion',
+        'Logueo': 'Logueo',
+        'Mora': 'Mora',
+        'Asignacion': 'Asignacion',
+        'PAGOS': 'PAGOS',
+        'Total toques': 'Total toques',
+        'Ultimo Toque': 'Ultimo Toque',
+        'Llamadas Microsip': 'Llamadas Microsip',
+        'Llamadas VOIP': 'Llamadas VOIP',
+        'Total Llamadas': 'Total Llamadas',
+        'Gerencia': 'Gerencia',
+        'Team': 'Team',
+        'Meta': 'Meta',
+        'Ejecucion': 'Ejecucion',
+        
+        # Mapeos con nombres diferentes
+        'Cliente gestionados 11 am': 'Clientes gestionados 11 am',
+        'Capital Asignado': 'Capital Asignado',
+        'Capital Recuperado': 'Capital Recuperado',
+        '% Recuperado': '% Recuperado',
+        '% Cuentas': '% Cuentas',
+        'Ind Logueo': 'Ind Logueo',
+        'Ind Ultimo': 'Ind Ultimo', 
+        'Ind Ges Medio': 'Ind Ges Medio',
+        'Ind Llamadas': 'Ind Llamadas',
+        'Indicador Toques': 'Indicador Toques',
+        'Ind Pausa': 'Ind Pausa',
+        'Total Infracciones': 'Total Infracciones',
+        'Total Operativo': 'Total Operativo'
+    }
+
+def obtener_columnas_operativo():
+    """
+    Retorna las columnas de la hoja Operativo
+    """
+    return [
         "CODIGO", "Tipo Jornada", "Fecha", "Cedula", "ID", "EXT", "VOIP", "Nombre", "Sede", "Ubicacion",
         "Logueo", "Mora", "Asignacion", "Clientes gestionados 11 am", "Capital Asignado", "Capital Recuperado",
         "PAGOS", "% Recuperado", "% Cuentas", "Total toques", "Ultimo Toque", "Llamadas Microsip",
         "Llamadas VOIP", "Total Llamadas", "Gerencia", "Team", "Meta", "Ejecucion", "Ind Logueo",
         "Ind Ultimo", "Ind Ges Medio", "Ind Llamadas", "Indicador Toques", "Ind Pausa", "Total Infracciones", "Total Operativo"
     ]
+
+def crear_hoja_operativo(writer, df_reporte3=None):
+    """
+    Crea la hoja "Operativo" con la tabla especificada e integra datos del Reporte 3
+    """
+    # Obtener configuraciones usando las funciones auxiliares
+    columnas_operativo = obtener_columnas_operativo()
+    mapeo_explicito = obtener_mapeo_columnas_operativo()
     
     # Crear DataFrame con datos del Reporte 3 si existe
     if df_reporte3 is not None and not df_reporte3.empty:
         print("Integrando datos del Reporte 3 en hoja Operativo...")
         print(f"Columnas disponibles en Reporte 3: {list(df_reporte3.columns)}")
         
-        # Mapeo explicito y mejorado de columnas entre Reporte 3 y Operativo
-        mapeo_explicito = {
-            # Mapeos directos (nombres exactos)
-            'Fecha': 'Fecha',
-            'Cedula': 'Cedula', 
-            'ID': 'ID',
-            'EXT': 'EXT',
-            'VOIP': 'VOIP',
-            'Nombre': 'Nombre',
-            'Sede': 'Sede',
-            'Ubicacion': 'Ubicación',  # CORREGIDO: mapear a la version con acento
-            'Logueo': 'Logueo',
-            'Mora': 'Mora',
-            'Asignacion': 'Asignación',  # CORREGIDO: mapear a la version con acento
-            'Clientes gestionados 11 am': 'Clientes gestionados 11 am',
-            'Capital Asignado': 'Capital Asignado',
-            'Capital Recuperado': 'Capital Recuperado',
-            'PAGOS': 'PAGOS',
-            '% Recuperado': '% Recuperado',
-            '% Cuentas': '% Cuentas',
-            'Total toques': 'Total toques',
-            'Ultimo Toque': 'Ultimo Toque',
-            'Llamadas Microsip': 'Llamadas Microsip',
-            'Llamadas VOIP': 'Llamadas VOIP',
-            'Total Llamadas': 'Total Llamadas',
-            'Gerencia': 'Gerencia',
-            'Team': 'Team'
-        }
-        
-        
-        # Mapeo automatico inteligente
+        # Mapeo automático inteligente
         mapeo_columnas = {}
         
         # Primero aplicar mapeos explicitos
@@ -2292,11 +2491,12 @@ def crear_hoja_operativo(writer, df_reporte3=None):
         
         # Agregar formulas en la columna Total Infracciones para cada fila de datos
         for row in range(2, len(df_operativo) + 2):  # Empezar en fila 2 (despues del header)
-            # Formula: COUNTIF del rango Ind Logueo hasta Ind Pausa donde valor = 0
+            # Formula: Contar valores que NO son 0.15 (es decir, contar infracciones/ceros)
+            # Como los indicadores usan 0.15 para "cumple" y 0 para "no cumple", contamos los 0s
             formula = f'=COUNTIF({ind_logueo_letter}{row}:{ind_pausa_letter}{row},0)'
             cell = worksheet.cell(row=row, column=total_infracciones_col)
             cell.value = formula
-        print(f"Formulas agregadas en columna Total Infracciones: {len(df_operativo)} formulas COUNTIF para contar ceros")
+        print(f"Formulas agregadas en columna Total Infracciones: {len(df_operativo)} formulas COUNTIF para contar ceros (infracciones)")
     else:
         print("ERROR: No se encontraron columnas Total Infracciones, Ind Logueo y/o Ind Pausa")
     
@@ -2581,7 +2781,7 @@ def crear_hoja_team(writer, datos_biometricos=None):
             if cedula_valor and str(cedula_valor).strip():
                 # Columna E es "Asistencia" (índice 5)
                 # VLOOKUP busca el código de ausentismo (columna A) en Asistencia Lideres y trae Novedad Ingreso (columna J)
-                formula_asistencia = f'=IFERROR(VLOOKUP(A{row_num},\'Asistencia Lideres\'!A:J,10,FALSE),"")'
+                formula_asistencia = f'=IFERROR(VLOOKUP(A{row_num},\'Asistencia Lideres\'!A:J,10,FALSE),0)'
                 worksheet[f'E{row_num}'].value = formula_asistencia
                 
                 # Columna F es "Asesores" (índice 6)  
@@ -2625,6 +2825,24 @@ def crear_hoja_team(writer, datos_biometricos=None):
                 
                 print(f"  📈 Fórmula % Calidad: promedio de Nota Total para códigos coincidentes fecha B{row_num}")
                 
+                # Columna I es "Infracciones" (índice 9) - FÓRMULA CON BÚSQUEDA MÚLTIPLE
+                # Suma las infracciones de la columna AI (Total Infracciones) para registros que coincidan en fecha y supervisor
+                formula_infracciones = f'''=SUMPRODUCT((Operativo!$C$2:$C$1000=$B{row_num})*(((ISNUMBER(SEARCH(LEFT($C{row_num},FIND(" ",$C{row_num}&" ")-1),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),51,50)),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),101,50)),Operativo!$Z$2:$Z$1000))))>=2)*Operativo!$AI$2:$AI$1000)'''
+                worksheet[f'I{row_num}'].value = formula_infracciones
+                
+                # Columna J es "% Operativo" (índice 10) - FÓRMULA CON BÚSQUEDA MÚLTIPLE
+                # Calcula el promedio de Total Operativo (columna AJ) para registros que coincidan en fecha y supervisor
+                # Numerador: suma de valores de Total Operativo con búsqueda múltiple
+                suma_operativo = f'SUMPRODUCT((Operativo!$C$2:$C$1000=$B{row_num})*(((ISNUMBER(SEARCH(LEFT($C{row_num},FIND(" ",$C{row_num}&" ")-1),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),51,50)),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),101,50)),Operativo!$Z$2:$Z$1000))))>=2)*Operativo!$AJ$2:$AJ$1000)'
+                # Denominador: cantidad de registros que coinciden con búsqueda múltiple
+                cantidad_registros = f'SUMPRODUCT((Operativo!$C$2:$C$1000=$B{row_num})*(((ISNUMBER(SEARCH(LEFT($C{row_num},FIND(" ",$C{row_num}&" ")-1),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),51,50)),Operativo!$Z$2:$Z$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{row_num}," ",REPT(" ",50)),101,50)),Operativo!$Z$2:$Z$1000))))>=2)*1)'
+                # Fórmula completa: promedio como porcentaje
+                formula_porcentaje_operativo = f'=IFERROR({suma_operativo}/{cantidad_registros},0)'
+                worksheet[f'J{row_num}'].value = formula_porcentaje_operativo
+                
+                print(f"  📊 Fórmula Infracciones: suma Total Infracciones de Operativo para fecha B{row_num}")
+                print(f"  📈 Fórmula % Operativo: promedio de Total Operativo para registros coincidentes fecha B{row_num}")
+                
                 # Columna K es "Cargo" (índice 11)
                 # VLOOKUP busca la cédula (columna D) en la tabla de usuarios de Planta (B:C) 
                 # Cambiando el rango para que sea más específico: B=Cedula (buscar), C=Cargo (devolver)
@@ -2646,14 +2864,17 @@ def crear_hoja_team(writer, datos_biometricos=None):
         # No necesitamos aplicar auto_filter manualmente
         max_row = len(registros_team) + 1
         
-        # Aplicar formato de porcentaje a toda la columna H (% Calidad)
-        print("📊 Aplicando formato de porcentaje a toda la columna H (% Calidad)...")
-        for row_num in range(2, max_row + 1):  # Desde fila 2 hasta la última fila con datos
+        # Aplicar formatos usando funciones optimizadas
+        aplicar_formato_porcentaje(worksheet, ['E', 'H', 'J'], max_row - 1)
+        
+        # Aplicar formato de número entero a toda la columna I (Infracciones)
+        print("📊 Aplicando formato de número entero a columna Infracciones...")
+        for row_num in range(2, max_row + 1):
             try:
-                worksheet[f'H{row_num}'].number_format = "0.00%"
+                worksheet[f'I{row_num}'].number_format = "0"
             except:
-                pass  # Si falla, continúa con la siguiente celda
-        print(f"✅ Formato de porcentaje aplicado a H2:H{max_row}")
+                pass
+        print(f"✅ Formato de número entero aplicado a I2:I{max_row}")
         
         # Agregar formato condicional para identificar visualmente filas con 0 asesores
         from openpyxl.formatting.rule import CellIsRule
@@ -2679,41 +2900,130 @@ def crear_hoja_team(writer, datos_biometricos=None):
     else:
         print("📋 No hay datos reales en Team, omitiendo fórmulas VLOOKUP")
     
-    # Aplicar formato simple sin tabla para evitar conflictos XML
-    print("📊 Aplicando formato básico a la hoja Team...")
+    # Aplicar formato de tabla Excel a la hoja Team
+    print("📊 Aplicando formato de tabla Excel a la hoja Team...")
     
-    # Solo aplicar bordes y formato básico sin crear tabla Excel
-    from openpyxl.styles import Border, Side
+    # Crear tabla Excel con filtros automáticos y estilo
+    from openpyxl.worksheet.table import Table, TableStyleInfo
     
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'), 
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    
-    # Aplicar bordes a todo el rango de datos
     max_row = len(registros_team) + 1
-    for row in range(1, max_row + 1):
-        for col in range(1, len(columnas_team) + 1):
-            cell = worksheet.cell(row=row, column=col)
-            cell.border = thin_border
+    tabla_team = Table(displayName="TablaTeam", ref=f"A1:{get_column_letter(len(columnas_team))}{max_row}")
     
-    print("✅ Formato básico aplicado sin tabla Excel para evitar conflictos")
+    # Aplicar estilo de tabla
+    style_team = TableStyleInfo(
+        name=TABLE_STYLE_BLUE, 
+        showFirstColumn=False,
+        showLastColumn=False, 
+        showRowStripes=True, 
+        showColumnStripes=True
+    )
+    tabla_team.tableStyleInfo = style_team
+    
+    # Agregar la tabla a la hoja
+    worksheet.add_table(tabla_team)
+    
+    print(f"✅ Formato de tabla aplicado: TablaTeam (A1:{get_column_letter(len(columnas_team))}{max_row})")
 
-def crear_hoja_gerente(writer):
+def crear_hoja_gerente(writer, datos_biometricos=None):
     """
     Crea la hoja "Gerente" con la tabla especificada
+    Incluye datos de gerentes desde datos biométricos
     """
-    # Crear DataFrame con las columnas especificadas y una fila de ejemplo
+    # Crear DataFrame con las columnas especificadas
     columnas_gerente = [
         "Codigo Aus", "Fecha", "Usuario", "Cedula", "Asistencia", "Asesores", 
         "Monitoreos", "% Calidad", "Infracciones", "% Operativo", "Cargo"
     ]
     
-    # Crear DataFrame con una fila de ejemplo
-    datos_ejemplo = [[""] * len(columnas_gerente)]
-    df_gerente = pd.DataFrame(datos_ejemplo, columns=columnas_gerente)
+    # Crear registros para gerentes desde datos biométricos
+    registros_gerente = []
+    
+    if datos_biometricos is not None:
+        print("📊 Procesando datos de gerentes para hoja Gerente...")
+        
+        # Filtrar solo gerentes
+        gerentes_data = []
+        for i, cargo in enumerate(datos_biometricos['cargos']):
+            if str(cargo).upper() == 'GERENTE':
+                gerentes_data.append({
+                    'codigo': datos_biometricos['codigos'][i] if i < len(datos_biometricos.get('codigos', [])) else '',
+                    'cedula': datos_biometricos['cedulas'][i] if i < len(datos_biometricos.get('cedulas', [])) else '',
+                    'nombre': datos_biometricos['nombres'][i] if i < len(datos_biometricos.get('nombres', [])) else '',
+                    'fecha': datos_biometricos['fechas'][i] if i < len(datos_biometricos.get('fechas', [])) else '',
+                    'ingreso': datos_biometricos['ingresos'][i] if i < len(datos_biometricos.get('ingresos', [])) else '',
+                    'salida': datos_biometricos['salidas'][i] if i < len(datos_biometricos.get('salidas', [])) else '',
+                    'cargo': cargo
+                })
+        
+        if gerentes_data:
+            print(f"📋 Encontrados {len(gerentes_data)} gerentes para Gerente")
+            
+            # Crear DataFrame temporal para agrupamiento
+            df_temp = pd.DataFrame(gerentes_data)
+            
+            # Agrupar por fecha, nombre, cedula (en caso de múltiples registros por día)
+            grouped = df_temp.groupby(['fecha', 'nombre', 'cedula']).agg({
+                'ingreso': 'first',
+                'salida': 'last',
+                'cargo': 'first'
+            }).reset_index()
+            
+            print(f"📊 Registros agrupados para Gerente: {len(grouped)}")
+            
+            # Generar códigos de ausentismo para cada gerente
+            for _, row in grouped.iterrows():
+                fecha = row['fecha']
+                usuario = row['nombre']
+                cedula = row['cedula']
+                cargo = row['cargo']
+                
+                # Generar código de ausentismo: cedula + día(00) + mes(00)
+                if pd.notna(fecha) and pd.notna(cedula):
+                    if isinstance(fecha, pd.Timestamp):
+                        dia = fecha.strftime('%d')
+                        mes = fecha.strftime('%m')
+                        fecha_str = fecha.strftime('%d/%m/%Y')
+                    else:
+                        # Intentar parsear la fecha si es string
+                        try:
+                            fecha_obj = pd.to_datetime(fecha)
+                            dia = fecha_obj.strftime('%d')
+                            mes = fecha_obj.strftime('%m')
+                            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                        except:
+                            dia = "00"
+                            mes = "00"
+                            fecha_str = str(fecha)
+                    
+                    codigo_aus = f"{cedula}{dia}{mes}"
+                else:
+                    codigo_aus = ""
+                    fecha_str = ""
+                
+                registro = [
+                    codigo_aus,    # Codigo Aus
+                    fecha_str,     # Fecha
+                    usuario,       # Usuario
+                    str(cedula),   # Cedula
+                    "",           # Asistencia (vacío para llenar manualmente)
+                    "",           # Asesores (vacío para llenar manualmente)
+                    "",           # Monitoreos (vacío para llenar manualmente)
+                    "",           # % Calidad (vacío para llenar manualmente)
+                    "",           # Infracciones (vacío para llenar manualmente)
+                    "",           # % Operativo (vacío para llenar manualmente)
+                    cargo         # Cargo (temporal, será reemplazado por fórmula VLOOKUP)
+                ]
+                registros_gerente.append(registro)
+                print(f"  📝 Registro Gerente: {usuario} - Cedula: {cedula} - Cargo: {cargo}")
+            
+            print(f"✅ Generados {len(registros_gerente)} registros para hoja Gerente")
+    
+    # Si no hay gerentes, crear una fila vacía
+    if not registros_gerente:
+        registros_gerente = [[""] * len(columnas_gerente)]
+        print("📋 No se encontraron gerentes, creando hoja Gerente vacía")
+    
+    df_gerente = pd.DataFrame(registros_gerente, columns=columnas_gerente)
     
     # Escribir a Excel
     df_gerente.to_excel(writer, sheet_name="Gerente", index=False)
@@ -2745,23 +3055,106 @@ def crear_hoja_gerente(writer):
     worksheet.column_dimensions['J'].width = 15  # % Operativo
     worksheet.column_dimensions['K'].width = 10  # Cargo
     
+    # Agregar fórmulas para gerentes (comenzando en fila 2 ya que fila 1 son encabezados)
+    print("📝 Agregando fórmulas VLOOKUP para hoja Gerente...")
+    
+    num_filas = len(df_gerente) + 1  # +1 por el encabezado
+    
+    for fila in range(2, num_filas + 1):
+        # E: Asistencia - VLOOKUP en 'Asistencia Lideres'!A:J, columna 10 (0% si vacío)
+        formula_asistencia = f'=IFERROR(VLOOKUP(A{fila},\'Asistencia Lideres\'!A:J,10,FALSE),0)'
+        worksheet[f'E{fila}'] = formula_asistencia
+        
+        # F: Asesores - SUMPRODUCT contando asesores en columna Gerencia (Y) de Operativo con búsqueda múltiple
+        formula_asesores = f'''=SUMPRODUCT((Operativo!C$2:C$1000=B{fila})*(((ISNUMBER(SEARCH(LEFT(C{fila},FIND(" ",C{fila}&" ")-1),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),51,50)),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),101,50)),Operativo!Y$2:Y$1000))))>=2))'''
+        worksheet[f'F{fila}'] = formula_asesores
+        
+        # G: Monitoreos - SUMPRODUCT con coincidencia en Gerencia y existencia en Calidad con búsqueda múltiple
+        formula_monitoreos = f'''=SUMPRODUCT((Operativo!C$2:C$1000=B{fila})*(((ISNUMBER(SEARCH(LEFT(C{fila},FIND(" ",C{fila}&" ")-1),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),51,50)),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),101,50)),Operativo!Y$2:Y$1000))))>=2)*(ISNUMBER(MATCH(Operativo!A$2:A$1000,Calidad!A:A,0))))'''
+        worksheet[f'G{fila}'] = formula_monitoreos
+        
+        # H: % Calidad - Porcentaje de calidad con búsqueda múltiple de palabras (0% si vacío)
+        formula_porcentaje_calidad = f'''=IFERROR(SUMPRODUCT((Operativo!C$2:C$1000=B{fila})*(((ISNUMBER(SEARCH(LEFT(C{fila},FIND(" ",C{fila}&" ")-1),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),51,50)),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),101,50)),Operativo!Y$2:Y$1000))))>=2)*(SUMIF(Calidad!A:A,Operativo!A$2:A$1000,Calidad!G:G)))/SUMPRODUCT((Operativo!C$2:C$1000=B{fila})*(((ISNUMBER(SEARCH(LEFT(C{fila},FIND(" ",C{fila}&" ")-1),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),51,50)),Operativo!Y$2:Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE(C{fila}," ",REPT(" ",50)),101,50)),Operativo!Y$2:Y$1000))))>=2)*(ISNUMBER(MATCH(Operativo!A$2:A$1000,Calidad!A:A,0)))),0)'''
+        worksheet[f'H{fila}'] = formula_porcentaje_calidad
+        
+        # I: Infracciones - SUMPRODUCT sumando infracciones en columna Gerencia (Y) con búsqueda múltiple de palabras
+        formula_infracciones = f'''=SUMPRODUCT((Operativo!$C$2:$C$1000=$B{fila})*(((ISNUMBER(SEARCH(LEFT($C{fila},FIND(" ",$C{fila}&" ")-1),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),51,50)),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),101,50)),Operativo!$Y$2:$Y$1000))))>=2)*Operativo!$AI$2:$AI$1000)'''
+        worksheet[f'I{fila}'] = formula_infracciones
+        
+        # J: % Operativo - Promedio de Total Operativo en columna Gerencia (Y) con búsqueda múltiple de palabras
+        # Numerador: suma de valores de Total Operativo (AJ) con búsqueda múltiple
+        suma_operativo = f'SUMPRODUCT((Operativo!$C$2:$C$1000=$B{fila})*(((ISNUMBER(SEARCH(LEFT($C{fila},FIND(" ",$C{fila}&" ")-1),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),51,50)),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),101,50)),Operativo!$Y$2:$Y$1000))))>=2)*Operativo!$AJ$2:$AJ$1000)'
+        # Denominador: cantidad de registros que coinciden con búsqueda múltiple
+        cantidad_registros = f'SUMPRODUCT((Operativo!$C$2:$C$1000=$B{fila})*(((ISNUMBER(SEARCH(LEFT($C{fila},FIND(" ",$C{fila}&" ")-1),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),51,50)),Operativo!$Y$2:$Y$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE($C{fila}," ",REPT(" ",50)),101,50)),Operativo!$Y$2:$Y$1000))))>=2)*1)'
+        # Fórmula completa: promedio como porcentaje
+        formula_porcentaje_operativo = f'=IFERROR({suma_operativo}/{cantidad_registros},0)'
+        worksheet[f'J{fila}'] = formula_porcentaje_operativo
+        
+        print(f"  📋 Fila {fila}: Fórmulas Asistencia, Asesores, Monitoreos, % Calidad, Infracciones y % Operativo agregadas")
+    
+    print("✅ Fórmulas VLOOKUP agregadas correctamente para hoja Gerente")
+    
+    # Aplicar formato de porcentaje usando función optimizada
+    aplicar_formato_porcentaje(worksheet, ['E', 'H', 'J'], num_filas - 1)
+    
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_gerente, "TablaGerente")
 
-def crear_hoja_consolidado(writer):
+def crear_hoja_consolidado(writer, df_operativo=None):
     """
     Crea la hoja "Consolidado" con la tabla especificada
+    Extrae códigos de la hoja Operativo y usa VLOOKUP para buscar información
     """
-    # Crear DataFrame con las columnas especificadas y una fila de ejemplo
+    # Crear DataFrame con las columnas especificadas
     columnas_consolidado = [
         "Codigo_Asis", "CODIGO", "Tipo Jornada", "Fecha", "Cedula", "ID", "Nombre", "Sede", "Ubicacion",
         "Asistencia", "Mora", "Monitoreos", "Nota Calidad", "Ejecucion", "# Infracciones", 
         "% Operativo", "Team", "Gerente"
     ]
     
-    # Crear DataFrame con una fila de ejemplo
-    datos_ejemplo = [[""] * len(columnas_consolidado)]
-    df_consolidado = pd.DataFrame(datos_ejemplo, columns=columnas_consolidado)
+    # Crear filas solo para los registros que realmente existen en Operativo
+    print("📊 Creando hoja Consolidado solo con filas que tienen datos...")
+    
+    registros_consolidado = []
+    
+    # Determinar cuántas filas realmente tiene Operativo
+    if df_operativo is not None and not df_operativo.empty:
+        num_filas_operativo = len(df_operativo)
+        print(f"📋 Operativo tiene {num_filas_operativo} registros reales")
+        
+        # Crear solo las filas que corresponden a datos reales
+        for i in range(2, num_filas_operativo + 2):  # +2 porque empezamos en fila 2 y len() da cantidad
+            registro = [
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:D,4,FALSE)&TEXT(VLOOKUP(B{i},Operativo!A:C,3,FALSE),"DDMM"),""))',  # Codigo_Asis - cedula + día + mes usando CODIGO
+                f'=Operativo!A{i}',  # CODIGO - código directo
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:B,2,FALSE),""))',  # Tipo Jornada - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:C,3,FALSE),""))',  # Fecha - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:D,4,FALSE),""))',  # Cedula - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:E,5,FALSE),""))',  # ID - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:H,8,FALSE),""))',  # Nombre - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:I,9,FALSE),""))',  # Sede - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:J,10,FALSE),""))', # Ubicacion - VLOOKUP con CODIGO
+                f'=IF(A{i}="",0,IFERROR(VLOOKUP(A{i},Ausentismo!A:P,16,FALSE),0))',  # % Asistencia - VLOOKUP Drive con Codigo_Asis, 0 si vacío
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:L,12,FALSE),""))', # Mora - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Calidad!A:H,8,FALSE),0))',  # Monitoreos - VLOOKUP Total Monitoreos (columna H), 0 si no encuentra
+                f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Calidad!A:G,7,FALSE),0))',   # Nota Calidad - VLOOKUP Nota Total (columna G) como porcentaje, 0 si vacío
+                f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Operativo!A:AB,28,FALSE),0))', # Ejecucion - VLOOKUP en columna AB (Ejecución) de Operativo, 0% si vacío
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:AI,35,FALSE),""))', # # Infracciones - mantener lógica especial
+                f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Operativo!A:AJ,36,FALSE),0))', # % Operativo - VLOOKUP con 0 si vacío o no encuentra
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:Z,26,FALSE),""))',  # Team - VLOOKUP con CODIGO
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:Y,25,FALSE),""))'   # Gerente - VLOOKUP con CODIGO
+            ]
+            registros_consolidado.append(registro)
+        
+        print(f"✅ Generados exactamente {len(registros_consolidado)} registros (igual que Operativo)")
+    else:
+        # Si no hay datos de Operativo, crear solo una fila vacía
+        registro_vacio = [""] * len(columnas_consolidado)
+        registros_consolidado.append(registro_vacio)
+        print("📋 No hay datos de Operativo, creando hoja Consolidado vacía")
+    
+    # Crear DataFrame con los registros exactos
+    df_consolidado = pd.DataFrame(registros_consolidado, columns=columnas_consolidado)
     
     # Escribir a Excel
     df_consolidado.to_excel(writer, sheet_name="Consolidado", index=False)
@@ -2799,6 +3192,9 @@ def crear_hoja_consolidado(writer):
     worksheet.column_dimensions['P'].width = 15  # % Operativo
     worksheet.column_dimensions['Q'].width = 10  # Team
     worksheet.column_dimensions['R'].width = 12  # Gerente
+    
+    # Aplicar formato de porcentaje usando función optimizada
+    aplicar_formato_porcentaje(worksheet, ['J', 'M', 'N', 'P'], len(registros_consolidado))
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_consolidado, "TablaConsolidado")
