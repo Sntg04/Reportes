@@ -1,26 +1,17 @@
 """
-Módulo para el procesamiento del 4_Reporte_Calidad
-Sistema para generación de reportes de calidad con métricas y análisis operativo.
+Módulo 4_Reporte_Calidad - Sistema de reportes de calidad con métricas operativas.
 
-Genera un archivo Excel completo con múltiples hojas:
-- Consolidado: Resumen de métricas principales
-- Gerente: Datos de gestión y supervisión  
-- Team: Información por equipos
-- Operativo: Datos operativos detallados del Reporte 3
-- Calidad: Métricas de calidad y seguimiento
-- Ausentismo: Control de asistencia con datos biométricos
-- Asistencia Lideres: Seguimiento de liderazgo
-- Planta: Información de personal y configuración
+Genera archivo Excel con 8 hojas:
+- Consolidado, Gerente, Team, Operativo, Calidad, Ausentismo, Asistencia Lideres, Planta
 
-Características principales:
-- Conversión automática de formatos de tiempo (24h → AM/PM)
-- Procesamiento de datos biométricos con validación
-- Generación automática de fórmulas Excel para métricas calculadas
-- Validación de datos y manejo de errores integrado
-- Configuración centralizada de constantes y umbrales
+Características:
+- Procesamiento de datos biométricos y del Reporte 3
+- Fórmulas Excel automáticas para métricas calculadas  
+- Formatos de tabla personalizados por hoja
+- Configuración centralizada
 
-Versión: 3.1 (Con mejoras de código y optimización)
-Última actualización: Enero 2025
+Versión: 3.2 (Código optimizado y funciones innecesarias eliminadas)
+Última actualización: Septiembre 2025
 """
 
 import pandas as pd
@@ -34,10 +25,9 @@ from utils.file_utils import allowed_file
 
 # Importaciones de openpyxl consolidadas
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.worksheet.datavalidation import DataValidation
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -47,14 +37,15 @@ logger = logging.getLogger(__name__)
 # ==========================================
 
 # Configuraciones de Excel
-DEFAULT_EXCEL_RANGE = 1000
 PERCENTAGE_FORMAT = '0.00%'
-INTEGER_FORMAT = '0'
-DATE_FORMAT = '%d/%m/%Y'
 TABLE_STYLE_DEFAULT = 'TableStyleMedium2'
-TABLE_STYLE_BLUE = 'TableStyleMedium9'
-TABLE_STYLE_GREEN = 'TableStyleMedium15'
-TABLE_STYLE_YELLOW = 'TableStyleMedium21'
+TABLE_STYLE_OLIVE_LIGHT = 'TableStyleLight11'  # Verde oliva tabla claro 11
+TABLE_STYLE_PURPLE_LIGHT = 'TableStyleLight12'  # Púrpura claro 12
+TABLE_STYLE_AQUA_LIGHT = 'TableStyleLight13'  # Aguamarina claro 13
+TABLE_STYLE_RED_LIGHT = 'TableStyleLight10'  # Rojo claro 10
+TABLE_STYLE_BLUE_LIGHT = 'TableStyleLight9'  # Azul claro 9
+TABLE_STYLE_ORANGE_LIGHT = 'TableStyleLight14'  # Naranja claro 14
+TABLE_STYLE_WHITE_LIGHT = 'TableStyleLight8'  # Blanco claro 8
 
 # Meses en español para nombres de archivo
 MESES_ESPANOL = {
@@ -74,108 +65,120 @@ SHEET_NAMES = {
     'PLANTA': 'Planta'
 }
 
-# Columnas estándar para validación
-COLUMNAS_REQUERIDAS_OPERATIVO = [
-    'CODIGO', 'Cedula', 'Fecha', 'Team', 'Gerencia'
-]
-
-COLUMNAS_REQUERIDAS_CALIDAD = [
-    'CODIGO', 'Nota Total', 'Total Monitoreos'
-]
+# Constantes de columnas requeridas eliminadas (no se usaban)
 
 # ==========================================
-# FUNCIONES DE UTILIDAD
+# FUNCIONES DE UTILIDAD OPTIMIZADAS
 # ==========================================
+# 
+# OPTIMIZACIÓN REALIZADA - Septiembre 2025:
+# - Eliminadas 6 funciones no utilizadas (centrar_contenido_tabla, validar_columnas_excel, 
+#   encontrar_columna_excel, procesar_fechas_columna, crear_formula_vlookup, crear_formula_busqueda_multiple)
+# - Eliminadas 8 constantes no utilizadas (DEFAULT_EXCEL_RANGE, INTEGER_FORMAT, DATE_FORMAT, 
+#   TABLE_STYLE_BLUE, TABLE_STYLE_GREEN, TABLE_STYLE_YELLOW, COLUMNAS_REQUERIDAS_OPERATIVO, COLUMNAS_REQUERIDAS_CALIDAD)
+# - Consolidadas importaciones de openpyxl para incluir Alignment
+# - Documentación simplificada y optimizada
+# - Código más limpio y mantenible
+#
 
-def validar_columnas_excel(df, columnas_requeridas, sheet_name="hoja"):
+def ajustar_ancho_columnas_automatico(worksheet, df, min_width=10, max_width=35):
     """
-    Valida que existan las columnas requeridas en un DataFrame
-    
-    Args:
-        df: DataFrame a validar
-        columnas_requeridas: Lista de nombres de columnas requeridas
-        sheet_name: Nombre de la hoja para mensajes de error
-    
-    Returns:
-        bool: True si todas las columnas existen, False si alguna falta
-    """
-    columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-    
-    if columnas_faltantes:
-        print(f"ERROR: Columnas faltantes en {sheet_name}: {columnas_faltantes}")
-        return False
-    
-    return True
-
-def encontrar_columna_excel(worksheet, nombre_columna, silent=False):
-    """
-    Encuentra el índice de una columna en una hoja Excel
+    Ajusta automáticamente el ancho de las columnas basado en el contenido
     
     Args:
         worksheet: Hoja de Excel de openpyxl
-        nombre_columna: Nombre de la columna a buscar
-        silent: Si True, no imprime mensajes de error
-    
-    Returns:
-        int o None: Índice de la columna (1-based) o None si no se encuentra
+        df: DataFrame con los datos para calcular el ancho
+        min_width: Ancho mínimo de columna (default: 10)
+        max_width: Ancho máximo de columna (default: 35)
     """
-    for col in range(1, worksheet.max_column + 1):
-        if worksheet.cell(row=1, column=col).value == nombre_columna:
-            return col
-    
-    if not silent:
-        print(f"ERROR: No se encontró columna '{nombre_columna}'")
-    
-    return None
-
-def procesar_fechas_columna(df, columna_fecha, formato_salida='%d/%m/%Y'):
-    """
-    Procesa y normaliza una columna de fechas con múltiples formatos
-    
-    Args:
-        df: DataFrame que contiene la columna
-        columna_fecha: Nombre de la columna de fechas
-        formato_salida: Formato de salida para las fechas
-    
-    Returns:
-        tuple: (fechas_procesadas, count_validas)
-    """
-    try:
-        # Intentar conversión automática
-        df[columna_fecha] = pd.to_datetime(df[columna_fecha], errors='coerce')
-        
-        # Intentar formatos específicos para valores nulos
-        mask_nulos = df[columna_fecha].isna()
-        if mask_nulos.any():
-            # Formato DD/MM/YYYY
-            try:
-                fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
-                                           format='%d/%m/%Y', errors='coerce')
-                df.loc[mask_nulos, columna_fecha] = fechas_temp
-            except (ValueError, TypeError) as e:
-                logger.debug(f"Error en conversión de fecha DD/MM/YYYY: {e}")
-                pass
-                
-            # Formato MM/DD/YYYY  
-            mask_nulos = df[columna_fecha].isna()
-            if mask_nulos.any():
-                try:
-                    fechas_temp = pd.to_datetime(df.loc[mask_nulos, columna_fecha], 
-                                               format='%m/%d/%Y', errors='coerce')
-                    df.loc[mask_nulos, columna_fecha] = fechas_temp
-                except (ValueError, TypeError) as e:
-                    logger.debug(f"Error en conversión de fecha MM/DD/YYYY: {e}")
-                    pass
-        
-        # Convertir a formato de salida
-        df[columna_fecha] = df[columna_fecha].dt.strftime(formato_salida)
-        count_validas = df[columna_fecha].notna().sum()
-        
-        return df[columna_fecha], count_validas
+    try:        
+        for idx, column in enumerate(df.columns, 1):
+            column_letter = get_column_letter(idx)
+            
+            # Calcular longitudes
+            header_length = len(str(column))
+            
+            # Obtener muestra de contenido (primeras 100 filas para eficiencia)
+            sample_size = min(100, len(df))
+            content_lengths = []
+            
+            for value in df[column].head(sample_size):
+                # Convertir a string y manejar valores especiales
+                str_value = str(value) if pd.notna(value) else ""
+                # Considerar saltos de línea y caracteres especiales
+                max_line_length = max(len(line) for line in str_value.split('\n')) if str_value else 0
+                content_lengths.append(max_line_length)
+            
+            # Calcular ancho óptimo
+            max_content_length = max(content_lengths) if content_lengths else 0
+            optimal_width = max(header_length, max_content_length)
+            
+            # Aplicar ajustes inteligentes según el tipo de contenido
+            if column.lower() in ['usuario', 'nombre', 'name']:
+                # Nombres de personas: rango 15-25
+                adjusted_width = min(max(optimal_width + 3, 15), 25)
+            elif column.lower() in ['cedula', 'id', 'codigo']:
+                # IDs y códigos: rango 10-15
+                adjusted_width = min(max(optimal_width + 1, 10), 15)
+            elif column.lower() in ['fecha', 'date']:
+                # Fechas: ancho fijo 12
+                adjusted_width = 12
+            elif 'porcentaje' in column.lower() or '%' in column.lower():
+                # Porcentajes: ancho 10
+                adjusted_width = 10
+            elif column.lower() in ['cargo', 'ubicacion', 'sede']:
+                # Cargos y ubicaciones: rango 12-20
+                adjusted_width = min(max(optimal_width + 2, 12), 20)
+            else:
+                # Contenido general: usar cálculo base con padding
+                adjusted_width = min(max(optimal_width + 2, min_width), max_width)
+            
+            # Asignar el ancho calculado
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+        print(f"✅ Ancho de columnas optimizado para {len(df.columns)} columnas")
         
     except Exception as e:
-        logger.warning(f"Error procesando fechas en columna {columna_fecha}: {e}")
-        return df[columna_fecha], 0
+        print(f"⚠️  Error ajustando ancho de columnas: {e}")
+        # Fallback: usar anchos por defecto según tipo de columna común
+        for idx, column in enumerate(df.columns, 1):
+            column_letter = get_column_letter(idx + 1)
+            if 'usuario' in str(column).lower() or 'nombre' in str(column).lower():
+                worksheet.column_dimensions[column_letter].width = 20
+            elif 'cedula' in str(column).lower() or 'codigo' in str(column).lower():
+                worksheet.column_dimensions[column_letter].width = 12
+            elif 'fecha' in str(column).lower():
+                worksheet.column_dimensions[column_letter].width = 12
+            else:
+                worksheet.column_dimensions[column_letter].width = 15
+
+# Función centrar_contenido_tabla eliminada - no se usa
+
+def aplicar_centrado_forzado(worksheet, rango_celdas):
+    """
+    Aplica centrado forzado a un rango específico de celdas
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        rango_celdas: String con el rango (ej: "A1:F20")
+    """
+    try:
+        alignment_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        # Aplicar formato a todo el rango
+        for row in worksheet[rango_celdas]:
+            for cell in row:
+                if cell.value is not None:
+                    cell.alignment = alignment_center
+        
+        print(f"✅ Centrado forzado aplicado al rango: {rango_celdas}")
+        
+    except Exception as e:
+        print(f"⚠️  Error aplicando centrado forzado: {e}")
+
+# Función validar_columnas_excel eliminada - no se usa
+
+# Funciones de utilidad eliminadas (no se usaban)
 
 # Constantes de configuración del reporte
 class ConfigReporte:
@@ -225,48 +228,7 @@ def aplicar_formato_porcentaje(worksheet, columnas_porcentaje, num_filas):
         
         print(f"✅ Formato de porcentaje aplicado a {num_filas} filas en columnas {', '.join(columnas_porcentaje)}")
 
-def crear_formula_vlookup(columna_busqueda, hoja_destino, rango_columnas, indice_columna, valor_error=""):
-    """
-    Crea una fórmula VLOOKUP estándar con validación
-    
-    Args:
-        columna_busqueda: Columna donde está el valor a buscar (ej: 'B{i}')
-        hoja_destino: Nombre de la hoja destino
-        rango_columnas: Rango de columnas (ej: 'A:G')
-        indice_columna: Índice de la columna a devolver
-        valor_error: Valor a devolver en caso de error
-    
-    Returns:
-        str: Fórmula VLOOKUP completa
-    """
-    return f'=IF({columna_busqueda}="",{valor_error},IFERROR(VLOOKUP({columna_busqueda},{hoja_destino}!{rango_columnas},{indice_columna},FALSE),{valor_error}))'
-
-def crear_formula_busqueda_multiple(fecha_col, nombre_col, equipo_col, operacion_col=None, operacion="COUNT"):
-    """
-    Crea la fórmula de búsqueda múltiple de palabras para coincidencias de nombres
-    
-    Args:
-        fecha_col: Columna de fecha (ej: 'B{fila}')
-        nombre_col: Columna de nombre (ej: 'C{fila}')
-        equipo_col: Columna de equipo en Operativo (ej: 'Z' para Team, 'Y' para Gerencia)
-        operacion_col: Columna de operación específica (ej: 'AI' para infracciones)
-        operacion: Tipo de operación ('COUNT', 'SUM', etc.)
-    
-    Returns:
-        str: Parte de la fórmula para búsqueda múltiple
-    """
-    condicion_busqueda = f"""((ISNUMBER(SEARCH(LEFT({nombre_col},FIND(" ",{nombre_col}&" ")-1),Operativo!{equipo_col}$2:{equipo_col}$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE({nombre_col}," ",REPT(" ",50)),51,50)),Operativo!{equipo_col}$2:{equipo_col}$1000)))+(ISNUMBER(SEARCH(TRIM(MID(SUBSTITUTE({nombre_col}," ",REPT(" ",50)),101,50)),Operativo!{equipo_col}$2:{equipo_col}$1000))))>=2"""
-    
-    condicion_fecha = f"Operativo!C$2:C$1000={fecha_col}"
-    
-    if operacion == "COUNT":
-        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda}))"
-    elif operacion == "SUM" and operacion_col:
-        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda})*Operativo!{operacion_col}$2:{operacion_col}$1000)"
-    elif operacion == "COUNT_MONITORED":
-        return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda})*(ISNUMBER(MATCH(Operativo!A$2:A$1000,Calidad!A:A,0))))"
-    
-    return f"SUMPRODUCT(({condicion_fecha})*({condicion_busqueda}))"
+# Funciones de fórmulas eliminadas (no se usaban)
 
 def generar_nombre_archivo_calidad(df_reporte3=None):
     """
@@ -360,9 +322,26 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
         # Crear tabla con estilo
         table = Table(displayName=table_name, ref=table_range)
         
-        # Aplicar estilo de tabla
+        # Aplicar estilo de tabla específico por hoja
+        if table_name == "TablaAsistenciaLideres":
+            style_name = TABLE_STYLE_OLIVE_LIGHT  # Verde oliva claro 11
+        elif table_name == "TablaAusentismo":
+            style_name = TABLE_STYLE_PURPLE_LIGHT  # Púrpura claro 12
+        elif table_name == "TablaCalidad":
+            style_name = TABLE_STYLE_AQUA_LIGHT  # Aguamarina claro 13
+        elif table_name == "TablaOperativo":
+            style_name = TABLE_STYLE_RED_LIGHT  # Rojo claro 10
+        elif table_name == "TablaTeam":
+            style_name = TABLE_STYLE_BLUE_LIGHT  # Azul claro 9
+        elif table_name == "TablaGerente":
+            style_name = TABLE_STYLE_ORANGE_LIGHT  # Naranja claro 14
+        elif table_name == "TablaConsolidado":
+            style_name = TABLE_STYLE_WHITE_LIGHT  # Blanco claro 8
+        else:
+            style_name = TABLE_STYLE_DEFAULT
+            
         style = TableStyleInfo(
-            name=TABLE_STYLE_DEFAULT,
+            name=style_name,
             showFirstColumn=False,
             showLastColumn=False,
             showRowStripes=True,
@@ -373,10 +352,93 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
         # Agregar tabla a la hoja
         worksheet.add_table(table)
         
+        # Aplicar texto blanco a los encabezados (fila 1)
+        aplicar_texto_blanco_encabezados(worksheet, len(dataframe.columns))
+        
         print(f"OK: Formato de tabla aplicado: {table_name} ({table_range})")
         
     except Exception as e:
         print(f"WARN:  No se pudo aplicar formato de tabla a {table_name}: {str(e)}")
+
+def aplicar_texto_blanco_encabezados(worksheet, num_columnas):
+    """
+    Aplica color de texto blanco a todos los encabezados de la tabla (fila 1)
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        num_columnas: Número de columnas en la tabla
+    """
+    try:
+        from openpyxl.styles import Font
+        
+        # Crear font blanco
+        font_blanco = Font(color="FFFFFF", bold=True)
+        
+        # Aplicar a todos los encabezados (fila 1)
+        for col in range(1, num_columnas + 1):
+            cell = worksheet.cell(row=1, column=col)
+            cell.font = font_blanco
+        
+        print(f"✅ Texto blanco aplicado a {num_columnas} encabezados")
+        
+    except Exception as e:
+        print(f"⚠️  Error aplicando texto blanco a encabezados: {e}")
+
+def aplicar_color_columnas_especificas(worksheet, columnas, color_fill, num_filas):
+    """
+    Aplica color de fondo específico a columnas seleccionadas
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        columnas: Lista de letras de columnas (ej: ['O', 'P'])
+        color_fill: Color de fondo en formato hex (ej: "FFE6E6" para rojo claro)
+        num_filas: Número total de filas con datos
+    """
+    try:
+        from openpyxl.styles import PatternFill
+        
+        # Crear el relleno con el color especificado
+        fill_color = PatternFill(start_color=color_fill, end_color=color_fill, fill_type="solid")
+        
+        # Aplicar a todas las filas de las columnas especificadas
+        for col_letter in columnas:
+            for row in range(1, num_filas + 1):
+                cell = worksheet[f'{col_letter}{row}']
+                cell.fill = fill_color
+        
+        print(f"✅ Color {color_fill} aplicado a columnas {columnas}")
+        
+    except Exception as e:
+        print(f"⚠️  Error aplicando color a columnas: {e}")
+
+def aplicar_color_encabezados_especificos(worksheet, columnas, color_fill):
+    """
+    Aplica color de fondo específico solo a los encabezados de columnas seleccionadas
+    
+    Args:
+        worksheet: Hoja de Excel de openpyxl
+        columnas: Lista de letras de columnas (ej: ['N', 'O', 'P'])
+        color_fill: Color de fondo en formato hex (ej: "80382E")
+    """
+    try:
+        from openpyxl.styles import PatternFill, Font
+        
+        # Crear el relleno con el color especificado
+        fill_color = PatternFill(start_color=color_fill, end_color=color_fill, fill_type="solid")
+        
+        # Crear font blanco para contraste
+        font_blanco = Font(color="FFFFFF", bold=True)
+        
+        # Aplicar solo a la fila 1 (encabezados) de las columnas especificadas
+        for col_letter in columnas:
+            cell = worksheet[f'{col_letter}1']
+            cell.fill = fill_color
+            cell.font = font_blanco
+        
+        print(f"✅ Color {color_fill} aplicado solo a encabezados de columnas {columnas}")
+        
+    except Exception as e:
+        print(f"⚠️  Error aplicando color a encabezados: {e}")
 
 def procesar_archivo_biometricos():
     """
@@ -1022,33 +1084,49 @@ def crear_hoja_planta(writer):
     # Tabla 1: Usuarios (rango dinámico basado en datos reales)
     num_usuarios = len(datos_usuarios) + 1  # +1 para incluir la fila del header
     tabla_usuarios = Table(displayName="TablaUsuarios", ref=f"A1:C{num_usuarios}")
-    style_usuarios = TableStyleInfo(name=TABLE_STYLE_BLUE, showFirstColumn=False,
+    style_usuarios = TableStyleInfo(name=TABLE_STYLE_OLIVE_LIGHT, showFirstColumn=False,
                                   showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_usuarios.tableStyleInfo = style_usuarios
     worksheet.add_table(tabla_usuarios)
     
     # Tabla 2: Dia Pago  
     tabla_dia_pago = Table(displayName="TablaDiaPago", ref="E1:F12")
-    style_dia_pago = TableStyleInfo(name=TABLE_STYLE_GREEN, showFirstColumn=False,
+    style_dia_pago = TableStyleInfo(name='TableStyleMedium15', showFirstColumn=False,
                                    showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_dia_pago.tableStyleInfo = style_dia_pago
     worksheet.add_table(tabla_dia_pago)
     
     # Tabla 3: Dia Normal
     tabla_dia_normal = Table(displayName="TablaDiaNormal", ref="H1:I12")
-    style_dia_normal = TableStyleInfo(name=TABLE_STYLE_YELLOW, showFirstColumn=False,
+    style_dia_normal = TableStyleInfo(name='TableStyleMedium21', showFirstColumn=False,
                                      showLastColumn=False, showRowStripes=True, showColumnStripes=True)
     tabla_dia_normal.tableStyleInfo = style_dia_normal
     worksheet.add_table(tabla_dia_normal)
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 20  # Usuario
-    worksheet.column_dimensions['B'].width = 12  # Cedula
-    worksheet.column_dimensions['C'].width = 10  # Cargo
-    worksheet.column_dimensions['E'].width = 15  # Dia Pago
-    worksheet.column_dimensions['F'].width = 8   # Meta Pago
-    worksheet.column_dimensions['H'].width = 15  # Dia Normal
-    worksheet.column_dimensions['I'].width = 8   # Meta Normal
+    # Ajustar ancho de columnas automáticamente
+    ajustar_ancho_columnas_automatico(worksheet, df_usuarios)
+    
+    # Ajustar columnas adicionales para las tablas E-F y H-I
+    worksheet.column_dimensions['E'].width = max(15, len("Dia Pago") + 2)
+    worksheet.column_dimensions['F'].width = max(8, len("Meta") + 2)
+    worksheet.column_dimensions['H'].width = max(15, len("Dia Normal") + 2)  
+    worksheet.column_dimensions['I'].width = max(8, len("Meta") + 2)
+    
+    # Establecer altura fija para todas las filas ANTES del centrado (Planta tiene múltiples tablas)
+    for row in range(1, 21):  # Suficientes filas para cubrir las 3 tablas de Planta
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_usuarios = len(datos_usuarios) + 1
+    aplicar_centrado_forzado(worksheet, f"A1:C{num_usuarios}")  # Tabla Usuarios
+    aplicar_centrado_forzado(worksheet, "E1:F12")  # Tabla Dia Pago
+    aplicar_centrado_forzado(worksheet, "H1:I12")  # Tabla Dia Normal
+    
+    # Ocultar la hoja Planta en el archivo descargado
+    worksheet.sheet_state = 'hidden'
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
 
 def crear_hoja_asistencia_lideres(writer, datos_biometricos=None):
     """
@@ -1160,29 +1238,29 @@ def crear_hoja_asistencia_lideres(writer, datos_biometricos=None):
     # Obtener la hoja y aplicar formato basico
     worksheet = writer.sheets["Asistencia Lideres"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla verde oliva claro se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, 12):  # A hasta K
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos = {
+        'A': 105,  # Cedula
+        'B': 101,  # ID
+        'C': 75,   # Usuario
+        'D': 310,  # Nombre
+        'E': 80,   # Cargo
+        'F': 85,   # Ingreso
+        'G': 75,   # Salida  
+        'H': 80,   # Horas Laboradas
+        'I': 120,  # Tipo Jornada
+        'J': 130,  # Novedad Ingreso
+        'K': 90    # Codigo Aus
+    }
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 12  # Codigo Aus
-    worksheet.column_dimensions['B'].width = 15  # Tipo Jornada
-    worksheet.column_dimensions['C'].width = 12  # Fecha
-    worksheet.column_dimensions['D'].width = 20  # Usuario
-    worksheet.column_dimensions['E'].width = 12  # Cedula
-    worksheet.column_dimensions['F'].width = 10  # Cargo
-    worksheet.column_dimensions['G'].width = 10  # Ingreso
-    worksheet.column_dimensions['H'].width = 10  # Salida
-    worksheet.column_dimensions['I'].width = 15  # Horas laboradas
-    worksheet.column_dimensions['J'].width = 18  # Novedad Ingreso
-    worksheet.column_dimensions['K'].width = 10  # Drive
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Agregar fórmulas para calcular horas laboradas automáticamente
     # Solo aplicar fórmulas si hay datos reales (no solo la fila vacía)
@@ -1245,6 +1323,19 @@ def crear_hoja_asistencia_lideres(writer, datos_biometricos=None):
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_asistencia, "TablaAsistenciaLideres")
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    num_filas_asistencia = len(df_asistencia) + 1  # +1 por encabezado
+    for row in range(1, num_filas_asistencia + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_columnas_asistencia = len(df_asistencia.columns)
+    rango_asistencia = f"A1:{get_column_letter(num_columnas_asistencia)}{num_filas_asistencia}"
+    aplicar_centrado_forzado(worksheet, rango_asistencia)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
 
 def crear_hoja_ausentismo(writer, df_reporte3=None):
     """
@@ -1316,37 +1407,50 @@ def crear_hoja_ausentismo(writer, df_reporte3=None):
     # Obtener la hoja y aplicar formato basico
     worksheet = writer.sheets["Ausentismo"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla púrpura claro 12 se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, 17):  # A hasta P
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_ausentismo = {
+        'A': 110,  # Aus
+        'B': 82,   # Codigo  
+        'C': 110,  # Tipo Jornada
+        'D': 75,   # Fecha
+        'E': 85,   # Cedula
+        'F': 52,   # ID
+        'G': 260,  # Nombre
+        'H': 70,   # Sede
+        'I': 100,  # Ubicacion
+        'J': 125,  # Logueo Admin
+        'K': 85,   # Ingreso
+        'L': 80,   # Salida
+        'M': 137,  # Horas Laboradas
+        'N': 145,  # Novedad Ingreso
+        'O': 104,  # Validacion
+        'P': 95    # Drive
+    }
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 12  # Codigo Aus
-    worksheet.column_dimensions['B'].width = 10  # Codigo
-    worksheet.column_dimensions['C'].width = 15  # Tipo Jornada
-    worksheet.column_dimensions['D'].width = 12  # Fecha
-    worksheet.column_dimensions['E'].width = 12  # Cedula
-    worksheet.column_dimensions['F'].width = 8   # ID
-    worksheet.column_dimensions['G'].width = 20  # Nombre
-    worksheet.column_dimensions['H'].width = 10  # Sede
-    worksheet.column_dimensions['I'].width = 12  # Ubicacion
-    worksheet.column_dimensions['J'].width = 15  # Logueo Admin
-    worksheet.column_dimensions['K'].width = 10  # Ingreso
-    worksheet.column_dimensions['L'].width = 10  # Salida
-    worksheet.column_dimensions['M'].width = 15  # Horas laboradas
-    worksheet.column_dimensions['N'].width = 18  # Novedad Ingreso
-    worksheet.column_dimensions['O'].width = 12  # Validacion
-    worksheet.column_dimensions['P'].width = 10  # Drive
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_ausentismo.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_ausentismo, "TablaAusentismo")
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    num_filas_ausentismo = len(df_ausentismo) + 1  # +1 por encabezado
+    for row in range(1, num_filas_ausentismo + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_columnas_ausentismo = len(df_ausentismo.columns)
+    rango_ausentismo = f"A1:{get_column_letter(num_columnas_ausentismo)}{num_filas_ausentismo}"
+    aplicar_centrado_forzado(worksheet, rango_ausentismo)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
     
     # AGREGAR FÓRMULAS DE VLOOKUP para buscar datos en la tabla Operativo
     agregar_formulas_vlookup_ausentismo(worksheet, len(df_ausentismo), df_reporte3)
@@ -1863,26 +1967,26 @@ def crear_hoja_calidad(writer):
     # Obtener la hoja y aplicar formato básico
     worksheet = writer.sheets["Calidad"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla aguamarina claro 13 se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, len(columnas_calidad) + 1):
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_calidad = {
+        'A': 82,   # Fecha Monitoreo
+        'B': 146,  # ID Asesor
+        'C': 97,   # VOZ
+        'D': 65,   # SMS
+        'E': 66,   # TERCERO
+        'F': 94,   # Nota Total
+        'G': 103,  # Total Monitoreos
+        'H': 147   # Codigo
+    }
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 15  # Codigo
-    worksheet.column_dimensions['B'].width = 18  # Fecha Monitoreo
-    worksheet.column_dimensions['C'].width = 12  # ID Asesor
-    worksheet.column_dimensions['D'].width = 8   # VOZ
-    worksheet.column_dimensions['E'].width = 8   # SMS
-    worksheet.column_dimensions['F'].width = 10  # TERCERO
-    worksheet.column_dimensions['G'].width = 12  # Nota Total
-    worksheet.column_dimensions['H'].width = 18  # Total Monitoreos
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_calidad.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Aplicar formato de porcentaje a las columnas especificadas
     porcentaje_format = '0.00%'
@@ -1905,6 +2009,19 @@ def crear_hoja_calidad(writer):
     # Aplicar formato de tabla si hay datos
     if not df_calidad.empty:
         aplicar_formato_tabla(worksheet, df_calidad, "TablaCalidad")
+        
+        # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+        num_filas_calidad = len(df_calidad) + 1  # +1 por encabezado
+        for row in range(1, num_filas_calidad + 1):
+            worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+        
+        # Aplicar centrado forzado DESPUÉS de configurar altura
+        num_columnas_calidad = len(df_calidad.columns)
+        rango_calidad = f"A1:{get_column_letter(num_columnas_calidad)}{num_filas_calidad}"
+        aplicar_centrado_forzado(worksheet, rango_calidad)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
 
 def verificar_integridad_datos(df_operativo, mapeo_columnas):
     """
@@ -2187,7 +2304,6 @@ def crear_hoja_operativo(writer, df_reporte3=None):
             fecha_col = i + 1
     
     if id_col and fecha_col:
-        from openpyxl.utils import get_column_letter
         id_letter = get_column_letter(id_col)
         fecha_letter = get_column_letter(fecha_col)
         
@@ -2521,19 +2637,10 @@ def crear_hoja_operativo(writer, df_reporte3=None):
     else:
         print("ERROR: No se encontraron columnas Total Operativo, Ind Logueo y/o Ind Pausa")
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="E74C3C", end_color="E74C3C", fill_type="solid")
-    
-    # Formatear encabezados
-    for col in range(1, len(columnas_operativo) + 1):
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla rojo claro 10 se aplicará automáticamente
     
     # Aplicar formato de porcentaje a las columnas % Recuperado y % Cuentas
-    from openpyxl.utils import get_column_letter
     
     # Crear diccionario de columnas para encontrar las posiciones
     column_letters = {}
@@ -2626,14 +2733,67 @@ def crear_hoja_operativo(writer, df_reporte3=None):
             total_infracciones_cell = f"{column_letters['Total Infracciones']}{row_num}"
             worksheet[total_infracciones_cell].number_format = integer_format
         print(f"OK: Formato entero aplicado a {max_row-1} filas en columna Total Infracciones")
-    # Ajustar ancho de columnas
-    from openpyxl.utils import get_column_letter
-    anchos_operativo = [10, 12, 10, 12, 8, 8, 8, 20, 10, 12, 10, 8, 12, 18, 15, 15, 10, 12, 12, 12, 15, 15, 15, 15, 12, 10, 8, 12, 12, 12, 12, 12, 15, 12, 18, 15]
-    for i, ancho in enumerate(anchos_operativo, 1):
-        worksheet.column_dimensions[get_column_letter(i)].width = ancho
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_operativo = {
+        'A': 90,   # CODIGO
+        'B': 117,  # Tipo Jornada
+        'C': 75,   # Fecha
+        'D': 82,   # Cedula
+        'E': 52,   # ID
+        'F': 61,   # EXT
+        'G': 70,   # VOIP
+        'H': 250,  # Nombre
+        'I': 70,   # Sede
+        'J': 100,  # Ubicacion
+        'K': 84,   # Logueo
+        'L': 74,   # Mora
+        'M': 106,  # Asignacion
+        'N': 209,  # Cliente gestionados 11 am
+        'O': 142,  # Capital Asignado
+        'P': 160,  # Capital Recuperado
+        'Q': 83,   # PAGOS
+        'R': 127,  # % Recuperado
+        'S': 103,  # % Cuentas
+        'T': 116,  # Total toques
+        'U': 124,  # Ultimo Toque
+        'V': 154,  # Llamadas Microsip
+        'W': 130,  # Llamadas VOIP
+        'X': 130,  # Total Llamadas
+        'Y': 116,  # Gerencia
+        'Z': 118,  # Team
+        'AA': 72,  # Meta
+        'AB': 98,  # Ejecucion
+        'AC': 107, # Ind Logueo
+        'AD': 105, # Ind Ultimo
+        'AE': 130, # Ind Ges Medio
+        'AF': 119, # Indicador Toques
+        'AG': 146, # Ind Llamadas
+        'AH': 98,  # Ind Pausa
+        'AI': 149, # Total Infracciones
+        'AJ': 135  # Total Operativo
+    }
+    
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_operativo.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_operativo, "TablaOperativo")
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    num_filas_operativo = len(df_operativo) + 1  # +1 por encabezado
+    for row in range(1, num_filas_operativo + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_columnas_operativo = len(df_operativo.columns)
+    rango_operativo = f"A1:{get_column_letter(num_columnas_operativo)}{num_filas_operativo}"
+    aplicar_centrado_forzado(worksheet, rango_operativo)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
 
 def crear_hoja_team(writer, datos_biometricos=None):
     """
@@ -2742,29 +2902,29 @@ def crear_hoja_team(writer, datos_biometricos=None):
     # Obtener la hoja y aplicar formato basico
     worksheet = writer.sheets["Team"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="9B59B6", end_color="9B59B6", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla azul claro 9 se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, len(columnas_team) + 1):
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_team = {
+        'A': 108,  # Cedula
+        'B': 75,   # ID
+        'C': 250,  # Usuario
+        'D': 82,   # Cargo
+        'E': 102,  # Ingreso
+        'F': 95,   # Salida
+        'G': 112,  # Horas Laboradas
+        'H': 99,   # Tipo Jornada
+        'I': 114,  # Novedad Ingreso
+        'J': 115,  # Asesores
+        'K': 74    # Infracciones
+    }
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 12  # Codigo Aus
-    worksheet.column_dimensions['B'].width = 12  # Fecha
-    worksheet.column_dimensions['C'].width = 20  # Usuario
-    worksheet.column_dimensions['D'].width = 12  # Cedula
-    worksheet.column_dimensions['E'].width = 12  # Asistencia
-    worksheet.column_dimensions['F'].width = 10  # Asesores
-    worksheet.column_dimensions['G'].width = 12  # Monitoreos
-    worksheet.column_dimensions['H'].width = 12  # % Calidad
-    worksheet.column_dimensions['I'].width = 15  # Infracciones
-    worksheet.column_dimensions['J'].width = 15  # % Operativo
-    worksheet.column_dimensions['K'].width = 10  # Cargo
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_team.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Agregar fórmulas VLOOKUP para buscar cargo en hoja Planta
     print("📊 Agregando fórmulas VLOOKUP para buscar cargo desde hoja Planta...")
@@ -2909,18 +3069,32 @@ def crear_hoja_team(writer, datos_biometricos=None):
     max_row = len(registros_team) + 1
     tabla_team = Table(displayName="TablaTeam", ref=f"A1:{get_column_letter(len(columnas_team))}{max_row}")
     
-    # Aplicar estilo de tabla
+    # Aplicar estilo de tabla azul claro 9
     style_team = TableStyleInfo(
-        name=TABLE_STYLE_BLUE, 
+        name=TABLE_STYLE_BLUE_LIGHT, 
         showFirstColumn=False,
         showLastColumn=False, 
         showRowStripes=True, 
-        showColumnStripes=True
+        showColumnStripes=False
     )
     tabla_team.tableStyleInfo = style_team
     
     # Agregar la tabla a la hoja
     worksheet.add_table(tabla_team)
+    
+    # Aplicar texto blanco a los encabezados de Team
+    aplicar_texto_blanco_encabezados(worksheet, len(columnas_team))
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    for row in range(1, max_row + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    rango_team = f"A1:{get_column_letter(len(columnas_team))}{max_row}"
+    aplicar_centrado_forzado(worksheet, rango_team)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
     
     print(f"✅ Formato de tabla aplicado: TablaTeam (A1:{get_column_letter(len(columnas_team))}{max_row})")
 
@@ -3031,29 +3205,11 @@ def crear_hoja_gerente(writer, datos_biometricos=None):
     # Obtener la hoja y aplicar formato basico
     worksheet = writer.sheets["Gerente"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="2E86AB", end_color="2E86AB", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla por defecto se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, len(columnas_gerente) + 1):
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
-    
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 12  # Codigo Aus
-    worksheet.column_dimensions['B'].width = 12  # Fecha
-    worksheet.column_dimensions['C'].width = 20  # Usuario
-    worksheet.column_dimensions['D'].width = 12  # Cedula
-    worksheet.column_dimensions['E'].width = 12  # Asistencia
-    worksheet.column_dimensions['F'].width = 10  # Asesores
-    worksheet.column_dimensions['G'].width = 12  # Monitoreos
-    worksheet.column_dimensions['H'].width = 12  # % Calidad
-    worksheet.column_dimensions['I'].width = 15  # Infracciones
-    worksheet.column_dimensions['J'].width = 15  # % Operativo
-    worksheet.column_dimensions['K'].width = 10  # Cargo
+    # Ajustar ancho de columnas automáticamente
+    ajustar_ancho_columnas_automatico(worksheet, df_gerente)
     
     # Agregar fórmulas para gerentes (comenzando en fila 2 ya que fila 1 son encabezados)
     print("📝 Agregando fórmulas VLOOKUP para hoja Gerente...")
@@ -3097,8 +3253,42 @@ def crear_hoja_gerente(writer, datos_biometricos=None):
     # Aplicar formato de porcentaje usando función optimizada
     aplicar_formato_porcentaje(worksheet, ['E', 'H', 'J'], num_filas - 1)
     
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_gerente = {
+        'A': 108,  # Codigo Aus
+        'B': 75,   # Fecha
+        'C': 262,  # Usuario
+        'D': 82,   # Cedula
+        'E': 102,  # Asistencia
+        'F': 95,   # Asesores
+        'G': 112,  # Monitoreos
+        'H': 99,   # % Calidad
+        'I': 114,  # Infracciones
+        'J': 115,  # % Operativo
+        'K': 74    # Cargo
+    }
+    
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_gerente.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
+    
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_gerente, "TablaGerente")
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    num_filas_gerente = len(df_gerente) + 1  # +1 por encabezado
+    for row in range(1, num_filas_gerente + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_columnas_gerente = len(df_gerente.columns)
+    rango_gerente = f"A1:{get_column_letter(num_columnas_gerente)}{num_filas_gerente}"
+    aplicar_centrado_forzado(worksheet, rango_gerente)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
 
 def crear_hoja_consolidado(writer, df_operativo=None):
     """
@@ -3108,7 +3298,7 @@ def crear_hoja_consolidado(writer, df_operativo=None):
     # Crear DataFrame con las columnas especificadas
     columnas_consolidado = [
         "Codigo_Asis", "CODIGO", "Tipo Jornada", "Fecha", "Cedula", "ID", "Nombre", "Sede", "Ubicacion",
-        "Asistencia", "Mora", "Monitoreos", "Nota Calidad", "Ejecucion", "# Infracciones", 
+        "Mora", "Asistencia", "Monitoreos", "Nota Calidad", "Ejecucion", "# Infracciones", 
         "% Operativo", "Team", "Gerente"
     ]
     
@@ -3134,8 +3324,8 @@ def crear_hoja_consolidado(writer, df_operativo=None):
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:H,8,FALSE),""))',  # Nombre - VLOOKUP con CODIGO
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:I,9,FALSE),""))',  # Sede - VLOOKUP con CODIGO
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:J,10,FALSE),""))', # Ubicacion - VLOOKUP con CODIGO
-                f'=IF(A{i}="",0,IFERROR(VLOOKUP(A{i},Ausentismo!A:P,16,FALSE),0))',  # % Asistencia - VLOOKUP Drive con Codigo_Asis, 0 si vacío
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:L,12,FALSE),""))', # Mora - VLOOKUP con CODIGO
+                f'=IF(A{i}="",0,IFERROR(VLOOKUP(A{i},Ausentismo!A:P,16,FALSE),0))',  # % Asistencia - VLOOKUP Drive con Codigo_Asis, 0 si vacío
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Calidad!A:H,8,FALSE),0))',  # Monitoreos - VLOOKUP Total Monitoreos (columna H), 0 si no encuentra
                 f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Calidad!A:G,7,FALSE),0))',   # Nota Calidad - VLOOKUP Nota Total (columna G) como porcentaje, 0 si vacío
                 f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Operativo!A:AB,28,FALSE),0))', # Ejecucion - VLOOKUP en columna AB (Ejecución) de Operativo, 0% si vacío
@@ -3162,39 +3352,61 @@ def crear_hoja_consolidado(writer, df_operativo=None):
     # Obtener la hoja y aplicar formato basico
     worksheet = writer.sheets["Consolidado"]
     
-    # Aplicar formato de encabezados
-    from openpyxl.styles import Font, PatternFill
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    # NO aplicar formato de encabezados manual - la tabla se encargará del formato
+    # El estilo de tabla blanco claro 8 se aplicará automáticamente
     
-    # Formatear encabezados
-    for col in range(1, len(columnas_consolidado) + 1):
-        cell = worksheet.cell(row=1, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
+    # Ajustar ancho de columnas con medidas específicas (en píxeles)
+    anchos_especificos_consolidado = {
+        'A': 114,  # Codigo_Asis
+        'B': 90,   # CODIGO
+        'C': 117,  # Tipo Jornada
+        'D': 75,   # Fecha
+        'E': 82,   # Cedula
+        'F': 52,   # ID
+        'G': 250,  # Nombre
+        'H': 70,   # Sede
+        'I': 100,  # Ubicacion
+        'J': 74,   # Mora
+        'K': 102,  # Asistencia
+        'L': 112,  # Monitoreos
+        'M': 118,  # Nota Calidad
+        'N': 97,   # Ejecucion
+        'O': 124,  # # Infracciones
+        'P': 115,  # % Operativo
+        'Q': 118,  # Team
+        'R': 116   # Gerente
+    }
     
-    # Ajustar ancho de columnas
-    worksheet.column_dimensions['A'].width = 12  # Codigo_Asis
-    worksheet.column_dimensions['B'].width = 10  # CODIGO
-    worksheet.column_dimensions['C'].width = 15  # Tipo Jornada
-    worksheet.column_dimensions['D'].width = 12  # Fecha
-    worksheet.column_dimensions['E'].width = 12  # Cedula
-    worksheet.column_dimensions['F'].width = 8   # ID
-    worksheet.column_dimensions['G'].width = 20  # Nombre
-    worksheet.column_dimensions['H'].width = 10  # Sede
-    worksheet.column_dimensions['I'].width = 12  # Ubicacion
-    worksheet.column_dimensions['J'].width = 12  # Asistencia
-    worksheet.column_dimensions['K'].width = 8   # Mora
-    worksheet.column_dimensions['L'].width = 12  # Monitoreos
-    worksheet.column_dimensions['M'].width = 15  # Nota Calidad
-    worksheet.column_dimensions['N'].width = 12  # Ejecucion
-    worksheet.column_dimensions['O'].width = 15  # # Infracciones
-    worksheet.column_dimensions['P'].width = 15  # % Operativo
-    worksheet.column_dimensions['Q'].width = 10  # Team
-    worksheet.column_dimensions['R'].width = 12  # Gerente
+    # Aplicar anchos específicos
+    for col_letter, ancho_pixeles in anchos_especificos_consolidado.items():
+        # Convertir píxeles a unidades de Excel (aproximadamente píxeles/7)
+        ancho_excel = ancho_pixeles / 7.0
+        worksheet.column_dimensions[col_letter].width = ancho_excel
     
     # Aplicar formato de porcentaje usando función optimizada
-    aplicar_formato_porcentaje(worksheet, ['J', 'M', 'N', 'P'], len(registros_consolidado))
+    aplicar_formato_porcentaje(worksheet, ['K', 'M', 'N', 'P'], len(registros_consolidado))
     
     # Aplicar formato de tabla
     aplicar_formato_tabla(worksheet, df_consolidado, "TablaConsolidado")
+    
+    # Establecer altura fija para todas las filas INMEDIATAMENTE después de la tabla
+    num_filas_consolidado = len(df_consolidado) + 1  # +1 por encabezado
+    for row in range(1, num_filas_consolidado + 1):
+        worksheet.row_dimensions[row].height = 15.0  # Altura fija en píxeles (20 píxeles ≈ 15 puntos)
+    
+    # Aplicar color específico #C0504D solo a encabezados de columnas Ejecución (N), # Infracciones (O) y % Operativo (P)
+    aplicar_color_encabezados_especificos(worksheet, ['N', 'O', 'P'], "C0504D")
+    
+    # Aplicar color específico #4BACC6 solo a encabezados de columnas Monitoreos (L) y Nota Calidad (M)
+    aplicar_color_encabezados_especificos(worksheet, ['L', 'M'], "4BACC6")
+    
+    # Aplicar color específico #8064A2 solo a encabezado de columna Asistencia (K)
+    aplicar_color_encabezados_especificos(worksheet, ['K'], "8064A2")
+    
+    # Aplicar centrado forzado DESPUÉS de configurar altura
+    num_columnas_consolidado = len(df_consolidado.columns)
+    rango_consolidado = f"A1:{get_column_letter(num_columnas_consolidado)}{num_filas_consolidado}"
+    aplicar_centrado_forzado(worksheet, rango_consolidado)
+    
+    # Ocultar líneas de cuadrícula
+    worksheet.sheet_view.showGridLines = False
