@@ -3327,7 +3327,7 @@ def crear_hoja_consolidado(writer, df_operativo=None):
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:L,12,FALSE),""))', # Mora - VLOOKUP con CODIGO
                 f'=IF(A{i}="",0,IFERROR(VLOOKUP(A{i},Ausentismo!A:P,16,FALSE),0))',  # % Asistencia - VLOOKUP Drive con Codigo_Asis, 0 si vacío
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Calidad!A:H,8,FALSE),0))',  # Monitoreos - VLOOKUP Total Monitoreos (columna H), 0 si no encuentra
-                f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Calidad!A:G,7,FALSE),0))',   # Nota Calidad - VLOOKUP Nota Total (columna G) como porcentaje, 0 si vacío
+                f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Calidad!A:G,7,FALSE),""))',   # Nota Calidad - VLOOKUP Nota Total (columna G), vacío si no encuentra
                 f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Operativo!A:AB,28,FALSE),0))', # Ejecucion - VLOOKUP en columna AB (Ejecución) de Operativo, 0% si vacío
                 f'=IF(B{i}="","",IFERROR(VLOOKUP(B{i},Operativo!A:AI,35,FALSE),""))', # # Infracciones - mantener lógica especial
                 f'=IF(B{i}="",0,IFERROR(VLOOKUP(B{i},Operativo!A:AJ,36,FALSE),0))', # % Operativo - VLOOKUP con 0 si vacío o no encuentra
