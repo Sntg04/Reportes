@@ -1,11 +1,10 @@
 """
 Módulo de reportes - Sistema de Reportes Flask
-Contiene los 5 procesadores de reportes principales:
+Contiene los 4 procesadores de reportes principales:
 - 1_Reporte_Llamadas
 - 2_Reporte_Admin_Cobranza
 - 3_Reporte_Reporteria
 - 4_Reporte_Calidad
-- Comuniquémonos
 """
 
 import importlib
@@ -16,7 +15,7 @@ _2_Reporte_Admin_Cobranza = importlib.import_module('reportes.2_Reporte_Admin_Co
 _3_Reporte_Reporteria = importlib.import_module('reportes.3_Reporte_Reporteria')
 _4_Reporte_Calidad = importlib.import_module('reportes.4_Reporte_Calidad')
 
-from .comuniquemonos import procesar_comuniquemonos
+# Módulo comuniquemonos eliminado - solo reportes 1, 2, 3, 4
 
 # Exportar las funciones
 procesar_llamadas_isabel = _1_Reporte_Llamadas.procesar_llamadas_isabel
@@ -40,6 +39,5 @@ __all__ = [
     'procesar_reporte_calidad',
     'descargar_reporte4',
     'generar_prueba_reporte4',
-    'procesar_comuniquemonos',
     'actualizar_base_asesores'
 ]

@@ -21,7 +21,6 @@ from reportes import (
     procesar_reporte_calidad,
     descargar_reporte4,
     generar_prueba_reporte4,
-    procesar_comuniquemonos,
     actualizar_base_asesores
 )
 
@@ -78,18 +77,11 @@ def vista_paso4():
     """Paso 4: Reporte Calidad"""
     return render_template('paso4_calidad.html')
 
-@app.route('/paso5')
-def vista_paso5():
-    """Paso 5: Reporte Comuniquémonos"""
-    return render_template('paso5_comuniquemonos.html')
+# Paso 5 eliminado - solo mantenemos reportes 1, 2, 3, 4
 
 # ==============================================================================
-# RUTAS COMPATIBILIDAD (mantenemos solo la ruta de comuniquémonos)
-# ==============================================================================
-@app.route('/reporte/comuniquemonos')
-def vista_comuniquemonos():
-    """Vista para reporte comuniquémonos"""
-    return render_template('comuniquemonos.html')
+# RUTAS DE PROCESAMIENTO (Endpoints de API)  
+# =============================================================================="
 
 # ==============================================================================
 # RUTAS DE PROCESAMIENTO (Endpoints de API)
@@ -204,11 +196,7 @@ def endpoint_generar_prueba_reporte4():
     """Endpoint para generar archivo de prueba del Reporte 4"""
     return generar_prueba_reporte4()
 
-@app.route('/procesar-comuniquemonos', methods=['POST'])
-@handle_errors
-def endpoint_comuniquemonos():
-    """Endpoint para procesar reporte comuniquémonos"""
-    return procesar_comuniquemonos()
+# Endpoint de comuniquémonos eliminado - solo reportes 1, 2, 3, 4
 
 @app.route('/actualizar-base-asesores', methods=['POST'])
 @handle_errors
@@ -221,5 +209,5 @@ def endpoint_actualizar_base_asesores():
 # ==============================================================================
 if __name__ == '__main__':
     logger.info("🚀 Iniciando Sistema de Reportes Flask")
-    logger.info("📊 Módulos de reportes cargados: 6 procesadores disponibles (calidad, cobranza, llamadas, agentes, reportería, comuniquémonos)")
+    logger.info("📊 Módulos de reportes cargados: 4 procesadores principales (1-Llamadas, 2-Admin/Cobranza, 3-Reportería, 4-Calidad)")
     app.run(debug=True, port=5000, host='0.0.0.0')
