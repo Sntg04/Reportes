@@ -27,13 +27,15 @@
 <body>
     <div class="container">
         <h1>Reportería Final</h1>
-        <p>Sube los 2 reportes generados para consolidarlos.</p>
+        <p>Sube los 3 reportes generados para consolidarlos.</p>
 
         <div class="file-inputs">
             <label for="reporteAdminFile">1. Archivo del Reporte de Cobranzas (del paso 2)</label>
             <input type="file" id="reporteAdminFile" accept=".xlsx">
-            <label for="reporteLlamadasFile">2. Archivo del Reporte de Llamadas (del paso 1)</label>
+            <label for="reporteLlamadasFile">2. Archivo del Reporte de Llamadas Microsip (del paso 1)</label>
             <input type="file" id="reporteLlamadasFile" accept=".xlsx">
+            <label for="reporteVoipFile">3. Archivo del Reporte de Llamadas VOIP (del paso 1)</label>
+            <input type="file" id="reporteVoipFile" accept=".xlsx">
         </div>
         
         <button id="processBtn" class="action-button">Generar Reporte Final</button>
@@ -153,6 +155,7 @@
             // La validación ahora permite procesar sin archivos si están disponibles de pasos anteriores
             const adminInput = document.getElementById('reporteAdminFile');
             const llamadasInput = document.getElementById('reporteLlamadasFile');
+            const voipInput = document.getElementById('reporteVoipFile');
             
             btn.disabled = true;
             statusDiv.className = 'status-processing';
@@ -165,6 +168,9 @@
             }
             if (llamadasInput.files[0]) {
                 formData.append('reporteLlamadasFile', llamadasInput.files[0]);
+            }
+            if (voipInput.files[0]) {
+                formData.append('reporteVoipFile', voipInput.files[0]);
             }
 
             try {
@@ -194,7 +200,16 @@
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = 'Reporteria_Final_Consolidada.xlsx';
+                        // Intentar obtener el nombre del archivo desde los headers de respuesta
+                        const contentDisposition = response.headers.get('Content-Disposition');
+                        let fileName = '3_Reporte_Reporteria.xlsx';
+                        if (contentDisposition) {
+                            const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                            if (fileNameMatch && fileNameMatch[1]) {
+                                fileName = fileNameMatch[1].replace(/['"]/g, '');
+                            }
+                        }
+                        a.download = fileName;
                         document.body.appendChild(a);
                         a.click();
                         a.remove();

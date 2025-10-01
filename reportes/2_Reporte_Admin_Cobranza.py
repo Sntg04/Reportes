@@ -1,8 +1,5 @@
 """
 Módulo para el procesamiento del 2_Reporte_Admin_Cobranza
-
-Este módulo procesa archivos de administración de cobranza y asistencia para generar
-reportes con clasificación automatizada de carteras y formato Excel profesional.
 """
 import pandas as pd
 import io
@@ -15,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from utils.file_utils import allowed_file
 
 # ==============================================================================
-# CONSTANTES Y CONFIGURACIÓN
+# CONSTANTES
 # ==============================================================================
 MESES_ESPANOL = {
     1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
@@ -47,37 +44,10 @@ RANGOS_FRS_M11A = [
 # FUNCIONES DE UTILIDAD
 # ==============================================================================
 
-def formatear_nombre(nombre: str) -> str:
-    """
-    Formatea nombres poniendo la primera letra de cada palabra en mayúscula
-    y el resto en minúscula (formato título)
-    
-    Args:
-        nombre (str): Nombre a formatear
-        
-    Returns:
-        str: Nombre formateado
-        
-    Example:
-        formatear_nombre("JUAN CARLOS pérez") -> "Juan Carlos Pérez"
-    """
-    if not nombre or pd.isna(nombre):
-        return ''
-    
-    return str(nombre).title()
+# Función formatear_nombre eliminada - usar str.title() directamente
 
 def _validar_frs_con_rango(aplicativo: str, rango_upper: str, cartera_base: str) -> str:
-    """
-    Valida cartera FRS con rango específico
-    
-    Args:
-        aplicativo: Nombre del aplicativo
-        rango_upper: Rango en mayúsculas para validación
-        cartera_base: Cartera base si no es FRS
-        
-    Returns:
-        str: Cartera final después de validación
-    """
+    """Valida cartera FRS con rango específico"""
     if aplicativo == 'FRS':
         return 'M1-1A-FRS' if any(rango in rango_upper for rango in RANGOS_FRS_M11A) else 'M0-FRS'
     elif aplicativo:
@@ -90,14 +60,7 @@ def _validar_frs_con_rango(aplicativo: str, rango_upper: str, cartera_base: str)
         return cartera_base
 
 def generar_nombre_archivo_admin(report: pd.DataFrame) -> str:
-    """
-    Genera nombre dinámico para el archivo Excel del reporte admin
-    
-    Args:
-        report (pd.DataFrame): DataFrame con la columna day_key
-        
-    Returns:
-        str: Nombre del archivo generado con formato de fecha español
+    """Genera nombre dinámico para el archivo Excel del reporte admin
         
     Example:
         generar_nombre_archivo_admin(df) -> "Admin-Cobranza_01_a_31_ene_2025"
@@ -131,7 +94,7 @@ def detectar_aplicativo(gerencia_text: str) -> Optional[str]:
         gerencia_text (str): Texto de la gerencia
         
     Returns:
-        Optional[str]: Tipo de aplicativo detectado ('FRS', 'PN', 'BT') o None
+        Optional[str]: Tipo de aplicativo detectado ('FRS', 'PX', 'BT') o None
         
     Example:
         detectar_aplicativo("GERENCIA FRS EJEMPLO") -> "FRS"
@@ -141,8 +104,8 @@ def detectar_aplicativo(gerencia_text: str) -> Optional[str]:
     
     if 'FRS' in gerencia_upper:
         return 'FRS'
-    elif 'PN' in gerencia_upper:
-        return 'PN'
+    elif 'PX' in gerencia_upper:
+        return 'PX'
     elif 'BT' in gerencia_upper:
         return 'BT'
     
@@ -151,8 +114,7 @@ def detectar_aplicativo(gerencia_text: str) -> Optional[str]:
 
 def extract_cartera_from_gerencia_and_rango(gerencia_text: str, rango_text: str) -> str:
     """
-    Sistema simplificado de clasificación de carteras
-    Solo usa GERENCIA y RANGO (elimina validaciones de CARTERA)
+    Sistema simplificado de clasificación de carteras usando GERENCIA y RANGO
     
     Args:
         gerencia_text (str): Texto de la gerencia
@@ -160,10 +122,6 @@ def extract_cartera_from_gerencia_and_rango(gerencia_text: str, rango_text: str)
         
     Returns:
         str: Cartera clasificada según las reglas de negocio
-        
-    Example:
-        extract_cartera_from_gerencia_and_rango("GERENCIA FRS", "91_120") -> "M1-1A-FRS"
-        extract_cartera_from_gerencia_and_rango("GERENCIA PN", "1_30") -> "M0-PN"
     """
     # Validar y normalizar entradas
     gerencia_text = str(gerencia_text) if pd.notna(gerencia_text) else ""
@@ -199,7 +157,7 @@ def extract_cartera_from_gerencia_and_rango(gerencia_text: str, rango_text: str)
     # REGLA 4: Caso especial M1-1A con BEATRIZ Y NANCY
     if ('M1-1' in gerencia_upper and 'A' in gerencia_upper and 
         'BEATRIZ' in gerencia_upper and 'NANCY' in gerencia_upper):
-        return 'M1-1A-PN'
+        return 'M1-1A-PX'
     
     # REGLA 5: M1-1A (con validación especial para FRS)
     if ('M1-1A' in gerencia_upper or 'M11A' in gerencia_upper or 
@@ -216,8 +174,62 @@ def extract_cartera_from_gerencia_and_rango(gerencia_text: str, rango_text: str)
         ('m0' in gerencia_text and 'vp' in gerencia_lower) or 'm0vp' in gerencia_lower):
         return _validar_frs_con_rango(aplicativo, rango_upper, 'M0-VP')
     
-    # Si no coincide con ninguna regla, devolver el texto original
-    return gerencia_text.strip()
+    # REGLA 8: Extraer carteras con espacios (M1-1 B -> M1-1B, M1-1 A -> M1-1A)
+    # Buscar patrones de cartera con espacios
+    patron_m1_1b = re.search(r'M1[-\s]*1[-\s]*B', gerencia_upper)
+    if patron_m1_1b:
+        return 'M1-1B'
+    
+    patron_m1_1a = re.search(r'M1[-\s]*1[-\s]*A', gerencia_upper)
+    if patron_m1_1a:
+        # Si tiene PX, BT, FRS, etc., validar con aplicativo
+        return _validar_frs_con_rango(aplicativo, rango_upper, 'M1-1A')
+    
+    patron_m1_2 = re.search(r'M1[-\s]*2', gerencia_upper)
+    if patron_m1_2:
+        return 'M1-2'
+    
+    patron_m0_pp = re.search(r'M0[-\s]*PP', gerencia_upper)
+    if patron_m0_pp:
+        return _validar_frs_con_rango(aplicativo, rango_upper, 'M0-PP')
+    
+    patron_m0_vp = re.search(r'M0[-\s]*VP', gerencia_upper)
+    if patron_m0_vp:
+        return _validar_frs_con_rango(aplicativo, rango_upper, 'M0-VP')
+    
+    # REGLA 9: Si contiene aplicativos conocidos, crear cartera con ellos
+    if aplicativo:
+        # Buscar M0, M1-1A, etc. en el texto y combinar con aplicativo
+        if re.search(r'M1[-\s]*1[-\s]*A', gerencia_upper):
+            return f'M1-1A-{aplicativo}'
+        elif re.search(r'M1[-\s]*1', gerencia_upper):
+            return f'M1-1A-{aplicativo}'
+        elif re.search(r'M0', gerencia_upper):
+            return f'M0-{aplicativo}'
+    
+    # Si no coincide con ninguna regla, devolver solo la primera parte antes de "Gerencia"
+    if 'gerencia' in gerencia_lower:
+        parte_cartera = gerencia_text.split('gerencia')[0].strip()
+        parte_cartera = parte_cartera.split('Gerencia')[0].strip()
+        if parte_cartera:
+            return parte_cartera
+    
+    # Si no hay "Gerencia", devolver las primeras palabras que parezcan cartera
+    palabras = gerencia_text.strip().split()
+    if palabras:
+        # Tomar hasta 3 palabras que contengan M0, M1, PP, VP, BT, PX, FRS
+        palabras_cartera = []
+        for palabra in palabras[:5]:  # Máximo primeras 5 palabras
+            if re.search(r'M[01]|PP|VP|BT|PX|FRS', palabra.upper()):
+                palabras_cartera.append(palabra)
+            elif len(palabras_cartera) > 0:  # Si ya tenemos palabras de cartera, parar
+                break
+        
+        if palabras_cartera:
+            return ' '.join(palabras_cartera)
+    
+    # Como último recurso, devolver el texto original truncado
+    return gerencia_text.strip()[:20]  # Máximo 20 caracteres
 
 # ==============================================================================
 # FUNCIONES DE DETECCIÓN Y CLASIFICACIÓN
@@ -267,8 +279,7 @@ def filtrar_por_estado_asistencia(df: pd.DataFrame) -> pd.DataFrame:
         df_filtrado = df_filtrado[~df_filtrado[estado_col].astype(str).str.strip().isin(estados_a_excluir)]
         filas_despues = len(df_filtrado)
         
-        print(f"INFO: Filtro por Estado aplicado. Registros eliminados: {filas_antes - filas_despues}")
-        print(f"INFO: Registros restantes para procesamiento: {filas_despues}")
+
     
     return df_filtrado
 
@@ -282,10 +293,6 @@ def detectar_archivo_asistencia(df: pd.DataFrame) -> bool:
         
     Returns:
         bool: True si es archivo de asistencia, False si no
-        
-    Example:
-        detectar_archivo_asistencia(df_con_conexion) -> True
-        detectar_archivo_asistencia(df_admin) -> False
     """
     return any(col in df.columns for col in POSIBLES_NOMBRES_CONEXION)
 
@@ -454,6 +461,9 @@ def get_gerente(gerencia_str: str, team_leader_str: str = "") -> str:
         return 'Yesid Espitia'
     if 'lizethe rodriguez' in team_leader or 'lizethe' in team_leader:
         return 'Daniela Arias'
+    # Específico: Natalia Quiceno va a William
+    if 'natalia quiceno' in team_leader or 'natalia' in team_leader:
+        return 'William Cabiativa'
     # Específico: Nancy Rodriguez va a William
     if 'nancy rodriguez' in team_leader:
         return 'William Cabiativa'
@@ -497,7 +507,7 @@ def generar_archivo_excel(merged_df: pd.DataFrame):
             # Crear DataFrame del reporte
             report_sheet_df = pd.DataFrame({
                 "ID": data.get('ID_str'),
-                "Nombre": data.get(4).apply(formatear_nombre) if 4 in data else '',
+                "Nombre": data.get(4).astype(str).str.title() if 4 in data else '',
                 "Logueo": data.get('Logueo', ''),
                 "CARTERA": data.get('cartera'),
                 "ASIGNACION": data.get(13),
@@ -509,8 +519,8 @@ def generar_archivo_excel(merged_df: pd.DataFrame):
                 "% CUENTAS": data.get('% CUENTAS'),
                 "TOQUES": data.get(21),
                 "ULTIMO TOQUE": data.get('ULTIMO TOQUE', ''),
-                "Gerente": data.get('Gerente').apply(formatear_nombre) if 'Gerente' in data else '',
-                "Team Leader": data.get('Team Leader').apply(formatear_nombre) if 'Team Leader' in data else '',
+                "Gerente": data.get('Gerente').astype(str).str.title() if 'Gerente' in data else '',
+                "Team Leader": data.get('Team Leader').astype(str).str.title() if 'Team Leader' in data else '',
                 "Ubicación": data.get('Ubicación')
             })
             

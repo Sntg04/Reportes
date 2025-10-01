@@ -1,106 +1,124 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paso 4: Reporte de Calidad</title>
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-            margin: 0; 
-            padding: 20px 0; 
+            margin: 0;
+            padding: 20px 0;
             min-height: 100vh;
         }
-        
+
         .header {
             text-align: center;
             color: white;
             margin-bottom: 30px;
         }
-        
+
         .step-indicator {
             font-size: 1.2rem;
             margin-bottom: 10px;
             opacity: 0.9;
         }
-        
+
         .step-title {
             font-size: 2.5rem;
             font-weight: bold;
             margin-bottom: 10px;
         }
-        
+
         .step-description {
             font-size: 1.1rem;
             opacity: 0.8;
         }
-        
-        .container { 
-            text-align: center; 
-            background-color: #ffffff; 
-            padding: 30px 40px; 
-            border-radius: 12px; 
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); 
-            width: 90%; 
-            max-width: 600px; 
+
+        .container {
+            text-align: center;
+            background-color: #ffffff;
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+            width: 90%;
+            max-width: 600px;
             margin: 0 auto;
         }
-        
-        .file-inputs label { 
-            display: block; 
-            font-weight: 600; 
-            color: #333; 
-            margin: 15px 0 5px 0; 
+
+        .file-inputs label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin: 15px 0 5px 0;
         }
-        
-        input[type="file"] { 
-            width: 100%; 
-            padding: 10px; 
-            border: 1px solid #dddfe2; 
-            border-radius: 6px; 
-            box-sizing: border-box; 
+
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #dddfe2;
+            border-radius: 6px;
+            box-sizing: border-box;
         }
-        
-        .action-button { 
-            display: inline-block; 
-            width: 100%; 
-            padding: 15px 30px; 
-            margin-top: 30px; 
-            font-size: 18px; 
-            font-weight: bold; 
-            color: #ffffff; 
-            background-color: #dc3545; 
-            border: none; 
-            border-radius: 6px; 
-            text-decoration: none; 
-            cursor: pointer; 
-            transition: background-color 0.3s; 
+
+        .action-button {
+            display: inline-block;
+            width: 100%;
+            padding: 15px 30px;
+            margin-top: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #dc3545;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
         }
-        
-        .action-button:hover { background-color: #c82333; }
-        .action-button:disabled { background-color: #f5c6cb; cursor: not-allowed; }
-        
-        #status { 
-            margin-top: 20px; 
-            font-style: italic; 
-            min-height: 20px; 
-            line-height: 1.5; 
-            padding: 10px; 
-            border-radius: 6px; 
+
+        .action-button:hover {
+            background-color: #c82333;
         }
-        
-        .status-success { color: #2a6f2b; background-color: #eaf7e9; }
-        .status-error { color: #a92020; background-color: #fce8e8; }
-        .status-processing { color: #5a7184; background-color: #f0f4f8; }
-        
+
+        .action-button:disabled {
+            background-color: #f5c6cb;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-style: italic;
+            min-height: 20px;
+            line-height: 1.5;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .status-success {
+            color: #2a6f2b;
+            background-color: #eaf7e9;
+        }
+
+        .status-error {
+            color: #a92020;
+            background-color: #fce8e8;
+        }
+
+        .status-processing {
+            color: #5a7184;
+            background-color: #f0f4f8;
+        }
+
         .navigation {
             margin-top: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .nav-button {
             padding: 12px 25px;
             border: none;
@@ -111,22 +129,22 @@
             text-decoration: none;
             display: inline-block;
         }
-        
+
         .nav-button.prev {
             background-color: #6c757d;
             color: white;
         }
-        
+
         .nav-button.next {
             background-color: #28a745;
             color: white;
         }
-        
+
         .nav-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
-        
+
         .nav-button:disabled {
             background-color: #e9ecef;
             color: #6c757d;
@@ -134,13 +152,13 @@
             transform: none;
             box-shadow: none;
         }
-        
+
         .step-progress {
             text-align: center;
             color: #6c757d;
             font-size: 14px;
         }
-        
+
         .file-optional {
             margin-top: 15px;
             padding: 15px;
@@ -148,28 +166,30 @@
             border-radius: 6px;
             border: 1px dashed #dee2e6;
         }
-        
+
         .optional-label {
             font-size: 14px;
             color: #6c757d;
             margin-bottom: 10px;
         }
-        
+
         .required-label {
             color: #dc3545;
             font-weight: bold;
         }
     </style>
 </head>
+
 <body>
     <div class="header">
         <div class="step-indicator">Paso 4 de 4 - ¡Final!</div>
         <h1 class="step-title">⭐ Reporte de Calidad</h1>
         <p class="step-description">Procesemos el reporte de calidad más completo</p>
     </div>
-    
+
     <div class="container">
-        <div id="reporte3Status" style="display: none; margin-bottom: 20px; padding: 15px; background-color: #e8f5e8; border: 1px solid #2a6f2b; border-radius: 8px; color: #2a6f2b;">
+        <div id="reporte3Status"
+            style="display: none; margin-bottom: 20px; padding: 15px; background-color: #e8f5e8; border: 1px solid #2a6f2b; border-radius: 8px; color: #2a6f2b;">
             <strong>✅ Archivo de Reporte 3 cargado automáticamente</strong>
             <br><span id="reporte3FileName"></span>
         </div>
@@ -181,7 +201,8 @@
                 </label>
                 <input type="file" id="excelFileReporte3" name="excelFileReporte3" accept=".xlsx" required>
                 <small id="reporte3Help" style="color: #6c757d; font-size: 12px; display: block; margin-top: 5px;">
-                    Selecciona el archivo de salida del Paso 3. Los datos se integrarán automáticamente en la hoja Operativo.
+                    Selecciona el archivo de salida del Paso 3. Los datos se integrarán automáticamente en la hoja
+                    Operativo.
                 </small>
             </div>
 
@@ -191,22 +212,24 @@
                 </label>
                 <input type="file" id="archivoBiometricos" name="archivoBiometricos" accept=".xlsx,.xls">
                 <small style="color: #6c757d; font-size: 12px; display: block; margin-top: 5px;">
-                    Archivo Excel con datos de biométricos (Hoja 1). Columnas: FECHA, CODIGO, CEDULA, NOMBRE, HORA, CARGO, AREA, SEDE, FECHA EN CHINO, TIPO DE DIA
+                    Archivo Excel con datos de biométricos (Hoja 1). Columnas: FECHA, CODIGO, CEDULA, NOMBRE, HORA,
+                    CARGO, AREA, SEDE, FECHA EN CHINO, TIPO DE DIA
                 </small>
             </div>
-            
+
             <button type="button" class="action-button" id="generateBtn">
                 ⭐ Generar Reporte de Calidad
             </button>
-            
+
             <!-- Botón temporal para pruebas de conectividad -->
-            <button type="button" class="action-button" id="testBtn" style="background-color: #007bff; margin-top: 10px;">
+            <button type="button" class="action-button" id="testBtn"
+                style="background-color: #007bff; margin-top: 10px;">
                 🔍 Probar Conectividad
             </button>
         </form>
 
         <div id="status"></div>
-        
+
         <div class="navigation">
             <a href="/paso3" class="nav-button prev">← Anterior</a>
             <div class="step-progress">Paso 4 de 4 - ¡Completado!</div>
@@ -219,7 +242,7 @@
         let reporte3AutoFile = null;
 
         // Verificar si hay archivo del paso 3 al cargar la página
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const reporte3File = sessionStorage.getItem('reporte3_file');
             if (reporte3File) {
                 reporte3AutoFile = reporte3File;
@@ -232,34 +255,34 @@
             }
         });
 
-        document.getElementById('generateBtn').addEventListener('click', function(e) {
+        document.getElementById('generateBtn').addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const reporte3File = document.getElementById('excelFileReporte3').files[0];
-            
+
             // Validar que haya al menos un archivo seleccionado
             if (!reporte3File && !reporte3AutoFile) {
                 showStatus('❌ Por favor selecciona el archivo de Reporte 3', 'error');
                 return;
             }
 
-        // Event listener para botón de prueba de conectividad
-        document.getElementById('testBtn').addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            testConnection();
-        });
-            
+            // Event listener para botón de prueba de conectividad
+            document.getElementById('testBtn').addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                testConnection();
+            });
+
             const button = this;
             button.disabled = true;
             button.textContent = '⏳ Procesando...';
-            
+
             showStatus('Procesando reporte de calidad... Este proceso puede tomar varios minutos.', 'processing');
-            
+
             // Construir FormData
             const formData = new FormData();
-            
+
             // Agregar archivo del Reporte 3 si existe (manual o automático)
             if (reporte3File) {
                 formData.append('excelFileReporte3', reporte3File);
@@ -271,45 +294,38 @@
             const biometricosFile = document.getElementById('archivoBiometricos').files[0];
             if (biometricosFile) {
                 formData.append('archivoBiometricos', biometricosFile);
-                console.log('Archivo de biométricos agregado:', biometricosFile.name);
+
             }
-            
+
             // Usar fetch para procesar y luego descargar
             fetch('/procesar-reporte-calidad', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showStatus(`✅ Reporte generado: ${data.filename}`, 'success');
-                    reportGenerado = true;
-                    updateNextButton();
-                    
-                    // Descargar automáticamente usando el endpoint directo
-                    if (data.temp_file) {
-                        const downloadLink = document.createElement('a');
-                        downloadLink.href = `/descargar-reporte4-directo/${data.temp_file}`;
-                        downloadLink.download = data.temp_file;
-                        downloadLink.style.display = 'none';
-                        document.body.appendChild(downloadLink);
-                        downloadLink.click();
-                        document.body.removeChild(downloadLink);
-                        
-                        showStatus(`✅ Descarga iniciada: ${data.filename}`, 'success');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus(`✅ Reporte generado: ${data.filename}`, 'success');
+                        reportGenerado = true;
+                        updateNextButton();
+
+                        // Descargar automáticamente usando el endpoint directo
+                        if (data.temp_file) {
+                            createDownloadLink(`/descargar-reporte4-directo/${data.temp_file}`, data.temp_file);
+                            showStatus(`✅ Descarga iniciada: ${data.filename}`, 'success');
+                        }
+                    } else {
+                        showStatus(`❌ Error: ${data.message}`, 'error');
                     }
-                } else {
-                    showStatus(`❌ Error: ${data.message}`, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showStatus('❌ Error al procesar el reporte de calidad', 'error');
-            })
-            .finally(() => {
-                button.disabled = false;
-                button.textContent = '⭐ Generar Reporte de Calidad';
-            });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showStatus('❌ Error al procesar el reporte de calidad', 'error');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = '⭐ Generar Reporte de Calidad';
+                });
         });
 
         function showStatus(message, type) {
@@ -329,24 +345,30 @@
             }
         }
 
+        // Función reutilizable para crear descargas
+        function createDownloadLink(url, filename) {
+            const downloadLink = document.createElement('a');
+            downloadLink.href = url;
+            downloadLink.download = filename;
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
         // Función para descargar archivo
         async function descargarArchivo(tempFile) {
             try {
                 const response = await fetch('/descargar-reporte4', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({temp_file: tempFile})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ temp_file: tempFile })
                 });
-                
+
                 if (response.ok) {
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = tempFile;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
+                    createDownloadLink(url, tempFile);
                     window.URL.revokeObjectURL(url);
                 } else {
                     const data = await response.json();
@@ -360,20 +382,20 @@
         // Función para probar conectividad
         async function testConnection() {
             try {
-                console.log('🔍 Probando conectividad...');
+
                 showStatus('🔍 Probando conectividad POST...', 'processing');
-                
+
                 const response = await fetch('/test-connection', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({test: true})
+                    body: JSON.stringify({ test: true })
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('✅ Respuesta del servidor:', data);
+
                     showStatus(`✅ Conectividad OK - ${data.message}`, 'success');
                 } else {
                     console.error('❌ Error en la respuesta:', response.status);
@@ -389,4 +411,5 @@
         updateNextButton();
     </script>
 </body>
+
 </html>

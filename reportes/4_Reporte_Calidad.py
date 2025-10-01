@@ -136,10 +136,10 @@ def ajustar_ancho_columnas_automatico(worksheet, df, min_width=10, max_width=35)
             # Asignar el ancho calculado
             worksheet.column_dimensions[column_letter].width = adjusted_width
             
-        print(f"✅ Ancho de columnas optimizado para {len(df.columns)} columnas")
+
         
     except Exception as e:
-        print(f"⚠️  Error ajustando ancho de columnas: {e}")
+
         # Fallback: usar anchos por defecto según tipo de columna común
         for idx, column in enumerate(df.columns, 1):
             column_letter = get_column_letter(idx + 1)
@@ -171,10 +171,11 @@ def aplicar_centrado_forzado(worksheet, rango_celdas):
                 if cell.value is not None:
                     cell.alignment = alignment_center
         
-        print(f"✅ Centrado forzado aplicado al rango: {rango_celdas}")
+
         
     except Exception as e:
-        print(f"⚠️  Error aplicando centrado forzado: {e}")
+        pass
+
 
 # Función validar_columnas_excel eliminada - no se usa
 
@@ -226,7 +227,7 @@ def aplicar_formato_porcentaje(worksheet, columnas_porcentaje, num_filas):
             for fila in range(2, num_filas + 2):  # +2 porque empezamos en fila 2
                 worksheet[f'{columna}{fila}'].number_format = PERCENTAGE_FORMAT
         
-        print(f"✅ Formato de porcentaje aplicado a {num_filas} filas en columnas {', '.join(columnas_porcentaje)}")
+
 
 # Funciones de fórmulas eliminadas (no se usaban)
 
@@ -355,10 +356,11 @@ def aplicar_formato_tabla(worksheet, dataframe, table_name):
         # Aplicar texto blanco a los encabezados (fila 1)
         aplicar_texto_blanco_encabezados(worksheet, len(dataframe.columns))
         
-        print(f"OK: Formato de tabla aplicado: {table_name} ({table_range})")
+
         
     except Exception as e:
-        print(f"WARN:  No se pudo aplicar formato de tabla a {table_name}: {str(e)}")
+        pass
+
 
 def aplicar_texto_blanco_encabezados(worksheet, num_columnas):
     """
@@ -379,10 +381,11 @@ def aplicar_texto_blanco_encabezados(worksheet, num_columnas):
             cell = worksheet.cell(row=1, column=col)
             cell.font = font_blanco
         
-        print(f"✅ Texto blanco aplicado a {num_columnas} encabezados")
+
         
     except Exception as e:
-        print(f"⚠️  Error aplicando texto blanco a encabezados: {e}")
+        pass
+
 
 def aplicar_color_columnas_especificas(worksheet, columnas, color_fill, num_filas):
     """
@@ -395,8 +398,6 @@ def aplicar_color_columnas_especificas(worksheet, columnas, color_fill, num_fila
         num_filas: Número total de filas con datos
     """
     try:
-        from openpyxl.styles import PatternFill
-        
         # Crear el relleno con el color especificado
         fill_color = PatternFill(start_color=color_fill, end_color=color_fill, fill_type="solid")
         
@@ -406,10 +407,11 @@ def aplicar_color_columnas_especificas(worksheet, columnas, color_fill, num_fila
                 cell = worksheet[f'{col_letter}{row}']
                 cell.fill = fill_color
         
-        print(f"✅ Color {color_fill} aplicado a columnas {columnas}")
+
         
     except Exception as e:
-        print(f"⚠️  Error aplicando color a columnas: {e}")
+        pass
+
 
 def aplicar_color_encabezados_especificos(worksheet, columnas, color_fill):
     """
@@ -421,8 +423,6 @@ def aplicar_color_encabezados_especificos(worksheet, columnas, color_fill):
         color_fill: Color de fondo en formato hex (ej: "80382E")
     """
     try:
-        from openpyxl.styles import PatternFill, Font
-        
         # Crear el relleno con el color especificado
         fill_color = PatternFill(start_color=color_fill, end_color=color_fill, fill_type="solid")
         
@@ -435,10 +435,11 @@ def aplicar_color_encabezados_especificos(worksheet, columnas, color_fill):
             cell.fill = fill_color
             cell.font = font_blanco
         
-        print(f"✅ Color {color_fill} aplicado solo a encabezados de columnas {columnas}")
+
         
     except Exception as e:
-        print(f"⚠️  Error aplicando color a encabezados: {e}")
+        pass
+
 
 def procesar_archivo_biometricos():
     """
@@ -453,15 +454,15 @@ def procesar_archivo_biometricos():
         dict: Diccionario con códigos y horas procesadas para integración
     """
     try:
-        print("=== PROCESANDO ARCHIVO BIOMÉTRICOS ===")
+
         
         # Obtener archivo biométrico del formulario
         biometricos_file = request.files.get('archivoBiometricos')
         if not biometricos_file:
-            print("AVISO: No se encontró archivo biométrico (opcional)")
+
             return None
         
-        print(f"✅ Archivo biométrico recibido: {biometricos_file.filename}")
+
         
         # Validar formato
         if not allowed_file(biometricos_file.filename, {'xlsx', 'xls'}):
@@ -469,11 +470,11 @@ def procesar_archivo_biometricos():
             return None
         
         # Leer archivo Excel - Primero detectar si tiene headers
-        print("🔍 Analizando estructura del archivo...")
+
         
         # Intentar leer con headers
         df_test = pd.read_excel(biometricos_file, nrows=5)
-        print(f"📊 Primeras columnas detectadas: {list(df_test.columns)}")
+
         
         # Si las columnas son 'Unnamed:', probablemente no hay headers
         if any('Unnamed:' in str(col) for col in df_test.columns):
@@ -487,7 +488,7 @@ def procesar_archivo_biometricos():
                 # Usar solo las columnas que existen
                 num_cols = min(len(df_biometricos.columns), len(nuevas_columnas))
                 df_biometricos.columns = nuevas_columnas[:num_cols]
-                print(f"✅ Headers aplicados: {list(df_biometricos.columns)}")
+
             else:
                 print(f"❌ ERROR: Archivo tiene muy pocas columnas: {len(df_biometricos.columns)}")
                 return None
@@ -496,8 +497,8 @@ def procesar_archivo_biometricos():
             biometricos_file.seek(0)
             df_biometricos = pd.read_excel(biometricos_file)
         
-        print(f"✅ Archivo procesado: {len(df_biometricos)} registros")
-        print(f"✅ Columnas finales: {list(df_biometricos.columns)}")
+
+
         
         # Validar que tenga las columnas requeridas
         columnas_requeridas = ['FECHA', 'CEDULA', 'HORA']
@@ -512,7 +513,7 @@ def procesar_archivo_biometricos():
         # Limpiar datos nulos
         registros_iniciales = len(df_biometricos)
         df_biometricos = df_biometricos.dropna(subset=['FECHA', 'CEDULA', 'HORA']).copy()
-        print(f"✅ Datos limpiados: {len(df_biometricos)} registros válidos de {registros_iniciales}")
+
         
         if len(df_biometricos) == 0:
             print("❌ ERROR: No hay registros válidos")
@@ -521,25 +522,25 @@ def procesar_archivo_biometricos():
         # Convertir fecha a datetime
         df_biometricos['FECHA'] = pd.to_datetime(df_biometricos['FECHA'], errors='coerce')
         df_biometricos = df_biometricos.dropna(subset=['FECHA']).copy()
-        print(f"✅ Fechas procesadas: {len(df_biometricos)} registros con fechas válidas")
+
         
         # Generar código: CEDULA + DIA + MES
-        print("🔄 Generando códigos biométricos...")
+
         df_biometricos['dia'] = df_biometricos['FECHA'].dt.day.astype(str).str.zfill(2)
         df_biometricos['mes'] = df_biometricos['FECHA'].dt.month.astype(str).str.zfill(2)
         df_biometricos['cedula_str'] = df_biometricos['CEDULA'].astype(str).str.strip()
         df_biometricos['codigo_biometrico'] = df_biometricos['cedula_str'] + df_biometricos['dia'] + df_biometricos['mes']
         
-        print(f"✅ Códigos generados: {len(df_biometricos['codigo_biometrico'].unique())} códigos únicos")
+
         
         # Mostrar muestra de códigos generados
-        print("🔍 Muestra de códigos generados:")
+
         for i, row in df_biometricos.head(3).iterrows():
             fecha_str = row['FECHA'].strftime('%d/%m/%Y')
-            print(f"   Cédula: {row['cedula_str']}, Fecha: {fecha_str} → Código: {row['codigo_biometrico']}")
+
         
         # Agrupar por código y calcular min/max horas
-        print("📊 Agrupando por código y calculando horas min/max...")
+
         
         # Convertir HORA a formato datetime para cálculos precisos
         try:
@@ -579,10 +580,10 @@ def procesar_archivo_biometricos():
             
         df_agrupado.columns = base_columns
         
-        print(f"✅ Agrupación completada: {len(df_agrupado)} registros únicos")
+
         
         # Convertir horas a formato AM/PM
-        print("🕐 Convirtiendo horas a formato AM/PM...")
+
         
         def convertir_a_ampm(hora_str):
             """Convierte hora en formato HH:MM:SS a formato HH:MM AM/PM"""
@@ -636,13 +637,12 @@ def procesar_archivo_biometricos():
         df_agrupado['hora_salida_ampm'] = df_agrupado['hora_salida_str'].apply(convertir_a_ampm)
         
         # Mostrar resultados con formato AM/PM
-        print("🎯 Resultados del procesamiento:")
+
         for i, row in df_agrupado.head(3).iterrows():
             fecha_str = row['fecha'].strftime('%d/%m/%Y') if pd.notna(row['fecha']) else 'N/A'
-            print(f"   Código: {row['codigo_biometrico']} | Cédula: {row['cedula']} | Fecha: {fecha_str}")
-            print(f"     → Ingreso: {row['hora_ingreso_ampm']} | Salida: {row['hora_salida_ampm']}")
+
         
-        print(f"✅ Horarios convertidos a formato AM/PM: {len(df_agrupado)} registros")
+
         
         # Preparar resultado con formato AM/PM
         resultado = {
@@ -660,7 +660,7 @@ def procesar_archivo_biometricos():
         else:
             resultado['cargos'] = []
         
-        print(f"✅ Procesamiento completado: {len(resultado['codigos'])} registros listos para integración con horarios AM/PM")
+
         return resultado
         
     except Exception as e:
@@ -689,7 +689,7 @@ def procesar_reporte_calidad():
         archivo_reporte3_content = None
         
         if reporte3_auto_file:
-            print(f"INFO: Usando archivo automatico del Paso 3: {reporte3_auto_file}")
+
             # Usar archivo temporal del paso 3
             temp_filepath = os.path.join('temp_files', reporte3_auto_file)
             if os.path.exists(temp_filepath):
@@ -826,7 +826,7 @@ def generar_reporte_calidad(archivo_reporte3, datos_biometricos=None):
                 for sheet_name, df_sheet in all_sheets.items():
                     if not df_sheet.empty:
                         print(f"  - Procesando hoja '{sheet_name}': {len(df_sheet)} registros")
-                        print(f"    Columnas: {list(df_sheet.columns)}")
+
                         
                         # Copiar sin modificaciones para preservar todos los datos
                         df_copy = df_sheet.copy()
@@ -1028,13 +1028,13 @@ def crear_hoja_planta(writer):
         ["M0-VP", "62,0%"],
         ["M1-1A", "9,0%"],
         ["M1-1B", "2,5%"],
-        ["M0-PN", "52,0%"],
+        ["M0-PX", "52,0%"],
         ["M0-FRS", "52,0%"],
         ["M0-BT", "52,0%"],
         ["M0-1-PP", "10,0%"],
         ["M1-1A-FRS", "8,0%"],
         ["M1-1A-BT", "8,0%"],
-        ["M1-1A-PN", "8,0%"]
+        ["M1-1A-PX", "8,0%"]
     ]
     
     df_dia_pago = pd.DataFrame(datos_dia_pago, columns=["Dia Pago", "Meta"])
@@ -1045,13 +1045,13 @@ def crear_hoja_planta(writer):
         ["M0-VP", "58,0%"],
         ["M1-1A", "9,0%"],
         ["M1-1B", "2,5%"],
-        ["M0-PN", "52,0%"],
+        ["M0-PX", "52,0%"],
         ["M0-FRS", "52,0%"],
         ["M0-BT", "52,0%"],
         ["M0-1-PP", "10,0%"],
         ["M1-1A-FRS", "8,0%"],
         ["M1-1A-BT", "8,0%"],
-        ["M1-1A-PN", "8,0%"]
+        ["M1-1A-PX", "8,0%"]
     ]
     
     df_dia_normal = pd.DataFrame(datos_dia_normal, columns=["Dia Normal", "Meta"])
@@ -1554,8 +1554,7 @@ def agregar_formulas_vlookup_ausentismo(worksheet, num_registros, df_reporte3=No
                 print(f"  🔗 Fila {row}: Codigo Aus -> {formula_codigo_aus}")
     
     print(f"✅ Sistema de fórmulas implementado según backup:")
-    print(f"   - Columna Codigo: Copia directa desde Operativo")
-    print(f"   - Otras columnas: INDEX/MATCH usando código como referencia")
+
     print(f"   - Codigo Aus: Cedula + DDMM automático")
     print(f"   - Columnas Ingreso y Salida quedan libres para biométricos")
 
@@ -2234,6 +2233,30 @@ def crear_hoja_operativo(writer, df_reporte3=None):
                 # Columna no mapeada - inicializar con valores vacios
                 df_operativo[col_operativo] = ""
         
+        # Convertir separadores decimales de punto a coma en columnas de porcentaje
+        print("\nINFO: Procesando separadores decimales...")
+        columnas_porcentaje = ['% Recuperado', '% Cuentas']
+        for col_porcentaje in columnas_porcentaje:
+            if col_porcentaje in df_operativo.columns:
+                # Convertir valores de punto decimal a coma decimal
+                def convertir_punto_a_coma(valor):
+                    if pd.isna(valor) or valor == '' or valor is None:
+                        return valor
+                    # Convertir a string si no lo es
+                    valor_str = str(valor)
+                    # Reemplazar punto por coma si es un número decimal
+                    if '.' in valor_str and valor_str.replace('.', '').replace('-', '').isdigit():
+                        return valor_str.replace('.', ',')
+                    return valor_str
+                
+                df_operativo[col_porcentaje] = df_operativo[col_porcentaje].apply(convertir_punto_a_coma)
+                print(f"  OK: Convertidos separadores decimales en columna {col_porcentaje}")
+                
+                # Mostrar muestra de los datos convertidos
+                muestra = df_operativo[col_porcentaje].dropna().head(3).tolist()
+                if muestra:
+                    print(f"     Muestra convertida: {muestra}")
+        
         print(f"INFO: Registros procesados en hoja Operativo: {len(df_operativo)}")
         
         # Verificar que no se hayan perdido registros
@@ -2647,9 +2670,9 @@ def crear_hoja_operativo(writer, df_reporte3=None):
     for col_num, col_name in enumerate(columnas_operativo, 1):
         column_letters[col_name] = get_column_letter(col_num)
     
-    # Formato de porcentaje para las columnas de porcentaje
+    # Formato de porcentaje para las columnas de porcentaje (usando coma como separador decimal)
     if '% Recuperado' in column_letters and '% Cuentas' in column_letters:
-        percent_format = '0.00%'
+        percent_format = '0,00%'  # Cambiado de '0.00%' a '0,00%' para usar coma como separador decimal
         # Aplicar formato a todas las filas de datos existentes
         max_row = max(len(df_operativo) + 1, 100)  # Minimo 100 filas para permitir datos manuales
         for row_num in range(2, max_row + 1):  # Empezar en fila 2 (despues del header)
@@ -2660,7 +2683,7 @@ def crear_hoja_operativo(writer, df_reporte3=None):
             # Columna % Cuentas
             percent_cuentas_cell = f"{column_letters['% Cuentas']}{row_num}"
             worksheet[percent_cuentas_cell].number_format = percent_format
-        print(f"OK: Formato de porcentaje aplicado a {max_row-1} filas en columnas % Recuperado y % Cuentas")
+        print(f"OK: Formato de porcentaje con coma decimal aplicado a {max_row-1} filas en columnas % Recuperado y % Cuentas")
     
     # Aplicar formato de porcentaje a la columna Meta
     if 'Meta' in column_letters:
@@ -3051,7 +3074,7 @@ def crear_hoja_team(writer, datos_biometricos=None):
         rule_empty = CellIsRule(operator='equal', formula=['""'], fill=red_fill, font=red_font)
         worksheet.conditional_formatting.add(f'F2:F{max_row}', rule_empty)
         
-        print("✅ Validación implementada:")
+
         print("  - Formato condicional: filas con 0 asesores se colorean en rojo")
         print("  - La tabla de Excel incluye filtros automáticos")
         print("  - Use los filtros de tabla para ocultar/eliminar filas con 0 asesores")
@@ -3248,7 +3271,7 @@ def crear_hoja_gerente(writer, datos_biometricos=None):
         
         print(f"  📋 Fila {fila}: Fórmulas Asistencia, Asesores, Monitoreos, % Calidad, Infracciones y % Operativo agregadas")
     
-    print("✅ Fórmulas VLOOKUP agregadas correctamente para hoja Gerente")
+
     
     # Aplicar formato de porcentaje usando función optimizada
     aplicar_formato_porcentaje(worksheet, ['E', 'H', 'J'], num_filas - 1)

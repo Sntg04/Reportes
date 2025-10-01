@@ -5,40 +5,17 @@ Incluye procesamiento para Reporte Isabel y Reporte VOIP
 import pandas as pd
 import io
 from datetime import datetime
-from typing import List, Tuple, Optional, Any, Dict
+from typing import List, Tuple, Optional, Dict
 from flask import request, send_file
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Alignment
 
 # ==============================================================================
-# FUNCIONES DE UTILIDAD
-# ==============================================================================
-
-def formatear_nombre(nombre: str) -> str:
-    """
-    Formatea nombres poniendo la primera letra de cada palabra en mayúscula
-    y el resto en minúscula (formato título)
-    
-    Args:
-        nombre (str): Nombre a formatear
-        
-    Returns:
-        str: Nombre formateado
-        
-    Example:
-        formatear_nombre("JUAN CARLOS pérez") -> "Juan Carlos Pérez"
-    """
-    if not nombre or pd.isna(nombre):
-        return ''
-    
-    return str(nombre).title()
-
-# ==============================================================================
 # CONSTANTES Y CONFIGURACIÓN
 # ==============================================================================
 
-# Extensiones permitidas
-ALLOWED_EXTENSIONS_VOID = {'csv', 'xlsx', 'xls'}
+# Extensiones permitidas para archivos de llamadas
+ALLOWED_EXTENSIONS_CALLS = {'csv', 'xlsx', 'xls'}
 
 # Diccionario para nombres de meses en español
 MESES_ESPANOL = {
@@ -50,22 +27,25 @@ MESES_ESPANOL = {
 # Estado de llamada efectiva
 ESTADO_EFECTIVA = 'ANSWERED'
 
+# Estados válidos que se deben contar en el total VOIP
+ESTADOS_VALIDOS_VOIP = {'answered', 'busy', 'no_answer', 'normal', 'out_area', 'offline'}
+
 # Columnas requeridas para Reporte VOIP
 COLUMNAS_REQUERIDAS_VOIP = ['First Call Agent', 'Ring Type', 'Begin Time']
 
-# Mapeo de columnas en chino a inglés
+# Mapeo de columnas chino-inglés
 COLUMNAS_CHINAS_MAPEO = {
-    '外呼人員': 'First Call Agent',      # Agente de llamada saliente
-    '状态': 'Ring Type',                 # Estado/Ring Type
-    '开始时间': 'Begin Time'              # Tiempo de inicio
+    '外呼人員': 'First Call Agent',
+    '状态': 'Ring Type',
+    '开始时间': 'Begin Time'
 }
 
-# Configuración de Excel
+# Configuración Excel
 TABLA_ESTILO = "TableStyleMedium12"
 FORMATO_NUMERO = '0'
-FORMATO_HORA = 'h:mm:ss AM/PM'  # Formato de hora con segundos y AM/PM
+FORMATO_HORA = 'h:mm:ss AM/PM'
 
-# Configuración de columnas para Excel
+# Configuración de columnas
 COLUMNAS_CONFIG_ISABEL = {
     "Número Extensión": {"width": 18, "format": FORMATO_NUMERO},
     "Total Llamadas": {"width": 16, "format": FORMATO_NUMERO},
@@ -75,19 +55,17 @@ COLUMNAS_CONFIG_ISABEL = {
 
 COLUMNAS_CONFIG_VOIP = {
     "Extensión": {"width": 20, "format": FORMATO_NUMERO},
-    "Answered": {"width": 12, "format": FORMATO_NUMERO},
-    "Normal": {"width": 12, "format": FORMATO_NUMERO},
     "Total": {"width": 12, "format": FORMATO_NUMERO},
     "Ultima Llamada": {"width": 16, "format": FORMATO_HORA}
 }
 
 # ==============================================================================
-# FUNCIONES UTILITARIAS
+# FUNCIONES
 # ==============================================================================
 
-def allowed_file_void(filename: str) -> bool:
+def allowed_file_calls(filename: str) -> bool:
     """
-    Verifica si el archivo tiene una extensión válida para procesamiento
+    Verifica si el archivo tiene una extensión válida para procesamiento de llamadas
     
     Args:
         filename: Nombre del archivo a validar
@@ -99,7 +77,7 @@ def allowed_file_void(filename: str) -> bool:
         return False
     
     extension = filename.rsplit('.', 1)[1].lower()
-    return extension in ALLOWED_EXTENSIONS_VOID
+    return extension in ALLOWED_EXTENSIONS_CALLS
 
 def validar_archivos_entrada(archivos_key: str = 'files') -> Tuple[Optional[List], Optional[str], Optional[int]]:
     """
@@ -133,7 +111,7 @@ def validar_archivos_entrada(archivos_key: str = 'files') -> Tuple[Optional[List
             if not filename:
                 return None, "Error: Se encontró un archivo sin nombre.", 400
                 
-            if not allowed_file_void(filename):
+            if not allowed_file_calls(filename):
                 return None, f"Error: El archivo '{filename}' no es válido. Extensiones permitidas: CSV, XLSX, XLS.", 400
                 
             archivos_validos.append(file)
@@ -209,9 +187,6 @@ def leer_archivo_datos(file) -> pd.DataFrame:
         # Limpiar nombres de columnas (eliminar espacios extra)
         df.columns = df.columns.str.strip()
         
-        # Log informativo (solo si hay un logger configurado)
-        print(f"✅ Archivo leído exitosamente: {filename} - {len(df)} filas, {len(df.columns)} columnas")
-        
         return df
         
     except pd.errors.EmptyDataError:
@@ -237,7 +212,7 @@ def aplicar_mapeo_columnas_chinas(df: pd.DataFrame) -> pd.DataFrame:
     
     return df_mapped
 
-def generar_nombre_hoja_fecha(day: Any) -> str:
+def generar_nombre_hoja_fecha(day) -> str:
     """
     Genera el nombre de hoja con formato DD-MM-YYYY (válido para Excel)
     
@@ -265,30 +240,21 @@ def configurar_hoja_excel(worksheet, df: pd.DataFrame, columnas_config: Dict, ta
     if num_rows == 0 or num_cols == 0:
         return
     
-    try:
-        # Crear nombre de tabla válido y calcular rango correctamente
-        import re
-        from openpyxl.utils import get_column_letter
-        
-        clean_title = re.sub(r'[^a-zA-Z0-9_]', '_', worksheet.title)
-        table_name = f"{tabla_prefix}{clean_title}"[:31]  # Excel limit 31 chars
-        
-        # Calcular rango de tabla correctamente para cualquier número de columnas
-        end_col = get_column_letter(num_cols)
-        table_range = f"A1:{end_col}{num_rows + 1}"
-        
-        # Crear tabla púrpura
-        table = Table(displayName=table_name, ref=table_range)
-        table.tableStyleInfo = TableStyleInfo(
-            name=TABLA_ESTILO, showFirstColumn=False, showLastColumn=False,
-            showRowStripes=True, showColumnStripes=False
-        )
-        worksheet.add_table(table)
-        print(f"Tabla creada: {table_name} con rango {table_range}")
-        
-    except Exception as e:
-        print(f"Error creando tabla para {worksheet.title}: {e}")
-        # Continuar sin tabla si hay problemas
+    # Crear tabla Excel
+    import re
+    from openpyxl.utils import get_column_letter
+    
+    clean_title = re.sub(r'[^a-zA-Z0-9_]', '_', worksheet.title)
+    table_name = f"{tabla_prefix}{clean_title}"[:31]
+    end_col = get_column_letter(num_cols)
+    table_range = f"A1:{end_col}{num_rows + 1}"
+    
+    table = Table(displayName=table_name, ref=table_range)
+    table.tableStyleInfo = TableStyleInfo(
+        name=TABLA_ESTILO, showFirstColumn=False, showLastColumn=False,
+        showRowStripes=True, showColumnStripes=False
+    )
+    worksheet.add_table(table)
     
     # Aplicar formato a columnas
     center_alignment = Alignment(horizontal='center', vertical='center')
@@ -404,12 +370,13 @@ def procesar_datos_agentes(*files) -> pd.DataFrame:
     df.dropna(subset=['First Call Agent'], inplace=True)
     df = df[df['First Call Agent'].astype(str).str.strip() != '']
     
-    # Formatear nombres de agentes
-    df['First Call Agent'] = df['First Call Agent'].apply(formatear_nombre)
+    # Formatear nombres de agentes usando str.title() directamente
+    df['First Call Agent'] = df['First Call Agent'].astype(str).str.title()
     
     df['Ring Type'] = df['Ring Type'].astype(str).str.lower().str.strip()
     
-    # Procesar fechas/tiempos
+    # Filtrar solo estados válidos y procesar fechas
+    df = df[df['Ring Type'].isin(ESTADOS_VALIDOS_VOIP)]
     df['Begin Time'] = pd.to_datetime(df['Begin Time'], errors='coerce')
     df.dropna(subset=['Begin Time'], inplace=True)
     df['day_key'] = df['Begin Time'].dt.date
@@ -466,35 +433,29 @@ def generar_reporte_agregado(df: pd.DataFrame, date_col_name: str) -> pd.DataFra
 def generar_reporte_agentes(df: pd.DataFrame) -> pd.DataFrame:
     """
     Genera estadísticas agregadas por agente y día para el Reporte VOIP
+    Solo incluye: Extensión, Total (suma de todos los estados válidos), Última Llamada
+    Estados válidos: answered, busy, no_answer, normal, out_area, offline
     
     Args:
-        df: DataFrame con datos de agentes procesados
+        df: DataFrame con datos de agentes procesados y filtrados
         
     Returns:
-        pd.DataFrame: Reporte con estadísticas de Answered, Normal, Total por agente
+        pd.DataFrame: Reporte con estadísticas de Total por agente
     """
     report_data = []
     
     for day_key in sorted(df['day_key'].unique()):
         day_data = df[df['day_key'] == day_key]
         
-        # Agrupar por First Call Agent
+        # Agrupar por First Call Agent - solo contar total y última llamada
         agent_stats = day_data.groupby('First Call Agent').agg({
-            'Ring Type': [
-                lambda x: (x == 'answered').sum(),  # Answered
-                lambda x: (x == 'normal').sum(),    # Normal
-                'count'                              # Total
-            ],
-            'Begin Time': 'max'  # Última llamada
+            'Ring Type': 'count',  # Total de llamadas válidas
+            'Begin Time': 'max'    # Última llamada
         }).reset_index()
         
-        # Aplanar columnas multi-nivel
-        agent_stats.columns = ['First Call Agent', 'Answered', 'Normal', 'Total', 'Ultima_Llamada']
+        # Renombrar columnas
+        agent_stats.columns = ['Extensión', 'Total', 'Ultima Llamada']
         agent_stats['day_key'] = day_key
-        
-        # Renombrar para consistencia
-        agent_stats = agent_stats.rename(columns={'First Call Agent': 'Extensión'})
-        agent_stats['Ultima Llamada'] = agent_stats['Ultima_Llamada']
         
         report_data.append(agent_stats)
     
@@ -538,6 +499,8 @@ def generar_excel_generico(report: pd.DataFrame, columnas_requeridas: List[str],
         if len(unique_days) == 0:
             raise ValueError("No hay fechas válidas en los datos")
         
+        hojas_creadas = 0
+        
         for day in unique_days:
             day_data = report[report['day_key'] == day]
             
@@ -563,23 +526,22 @@ def generar_excel_generico(report: pd.DataFrame, columnas_requeridas: List[str],
             
             # Aplicar formato
             configurar_hoja_excel(worksheet, final_report_df, columnas_config, tabla_prefix)
+            hojas_creadas += 1
         
         # Verificar que al menos una hoja fue creada
-        if len(writer.sheets) == 0:
-            raise ValueError("No se pudieron crear hojas en el Excel. Verifique que los datos contengan fechas válidas.")
+        if hojas_creadas == 0:
+            # Crear una hoja de respaldo con información de error
+            error_df = pd.DataFrame({
+                'Error': ['No hay datos válidos para mostrar'],
+                'Columnas Esperadas': [', '.join(columnas_requeridas)],
+                'Datos Disponibles': [f"Filas: {len(report)}, Columnas: {', '.join(report.columns)}"]
+            })
+            error_df.to_excel(writer, sheet_name='Error_Info', index=False)
     
     output.seek(0)
     return output
 
-def generar_excel_reporte(report: pd.DataFrame) -> io.BytesIO:
-    """Genera el archivo Excel con el reporte Isabel con tabla púrpura"""
-    columnas_requeridas = ['Número Extensión', 'Total Llamadas', 'Llamadas Efectivas', 'Última Llamada']
-    return generar_excel_generico(report, columnas_requeridas, COLUMNAS_CONFIG_ISABEL, "Tabla")
-
-def generar_excel_agentes(report: pd.DataFrame) -> io.BytesIO:
-    """Genera archivo Excel con reporte de agentes VOIP dividido por días"""
-    columnas_requeridas = ['Extensión', 'Answered', 'Normal', 'Total', 'Ultima Llamada']
-    return generar_excel_generico(report, columnas_requeridas, COLUMNAS_CONFIG_VOIP, "Agentes")
+# Funciones wrapper eliminadas - usar generar_excel_generico directamente
 
 # ==============================================================================
 # FUNCIONES DE NOMBRES DE ARCHIVO
@@ -660,7 +622,8 @@ def procesar_llamadas_isabel():
         nombre_archivo = generar_nombre_archivo_generico(report, "Reporte Llamadas Isabel")
         
         # Generar archivo Excel
-        output = generar_excel_reporte(report)
+        columnas_requeridas = ['Número Extensión', 'Total Llamadas', 'Llamadas Efectivas', 'Última Llamada']
+        output = generar_excel_generico(report, columnas_requeridas, COLUMNAS_CONFIG_ISABEL, "Tabla")
         
         # Resetear el buffer para envío
         output.seek(0)
@@ -686,14 +649,21 @@ def procesar_reporte_agentes():
         # Procesar datos
         df = procesar_datos_agentes(*archivos)
         
+        if df.empty:
+            return "Error: No hay datos válidos después del filtrado. Verifique que los archivos contengan llamadas con estados válidos (answered, busy, no_answer, normal, out_area, offline).", 400
+        
         # Generar reporte
         report = generar_reporte_agentes(df)
+        
+        if report.empty:
+            return "Error: No se pudo generar el reporte. Verifique que los datos contengan agentes válidos.", 400
         
         # Generar nombre dinámico del archivo
         nombre_archivo = generar_nombre_archivo_generico(report, "Reporte Llamadas VOIP")
         
         # Generar Excel
-        output = generar_excel_agentes(report)
+        columnas_requeridas = ['Extensión', 'Total', 'Ultima Llamada']
+        output = generar_excel_generico(report, columnas_requeridas, COLUMNAS_CONFIG_VOIP, "Agentes")
         
         # Resetear el buffer para envío
         output.seek(0)
